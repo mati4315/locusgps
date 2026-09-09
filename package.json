@@ -1,0 +1,21 @@
+{
+  "name": "locusgps",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Locus GPS Android app and Node.js API",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/src/app.js",
+    "dev": "node --watch server/src/app.js",
+    "migrate": "node server/src/db/migrate.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "mysql2": "^3.12.0"
+  }
+}

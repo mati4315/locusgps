@@ -5,6 +5,7 @@ local.properties
 *.iml
 app/build/
 keystore.properties
+node_modules/
 
 # Never commit runtime secrets.
 maptiler.properties
