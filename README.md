@@ -35,3 +35,5 @@ La clave se inyecta únicamente en el `BuildConfig` de la app. Antes de una dist
 ## Backend local
 
 La base del backend está en `server/`. Copia `server/.env.example` a `server/.env`, instala dependencias con `npm install` y ejecuta `npm run start`. Antes de usar datos persistentes, crea la base de datos MySQL indicada en `.env` y ejecuta `npm run migrate`. El endpoint público inicial es `GET /health`; el resto requiere `Authorization: Bearer <token>`. Falta enlazar el token con un dispositivo real de Hostinger y completar el CRUD persistente de favoritos/ubicación cuando estén disponibles esas credenciales.
+
+La app Android usa `https://locusgps.pro` como API por defecto y muestra el estado de `/health` en la pantalla principal. Se puede cambiar en compilación con `-PAPI_BASE_URL=https://api.locusgps.pro` cuando el subdominio esté conectado.

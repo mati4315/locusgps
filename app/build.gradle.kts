@@ -15,6 +15,10 @@ val mapTilerProperties = Properties().apply {
 val mapTilerKey = (mapTilerProperties.getProperty("MAPTILER_KEY")
     ?: providers.gradleProperty("MAPTILER_KEY").orNull
     ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
+val apiBaseUrl = (providers.gradleProperty("API_BASE_URL").orNull ?: "https://locusgps.pro")
+    .trimEnd('/')
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
 
 android {
     namespace = "com.locusgps"
@@ -28,6 +32,7 @@ android {
         versionName = "0.1.0"
 
         buildConfigField("String", "MAPTILER_KEY", "\"$mapTilerKey\"")
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
     buildFeatures {
@@ -46,6 +51,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

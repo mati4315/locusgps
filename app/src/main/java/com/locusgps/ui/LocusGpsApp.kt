@@ -34,13 +34,14 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun LocusGpsApp(location: UserLocation?, hasMapTilerKey: Boolean, onRequestLocation: () -> Unit) {
+fun LocusGpsApp(location: UserLocation?, hasMapTilerKey: Boolean, apiStatus: String, onRequestLocation: () -> Unit) {
     MaterialTheme(colorScheme = DarkColors) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Column {
                 Box(modifier = Modifier.weight(1f)) {
                     MapScreen(location = location, hasMapTilerKey = hasMapTilerKey)
                     SearchBarPlaceholder(modifier = Modifier.align(Alignment.TopCenter))
+                    ApiStatus(modifier = Modifier.align(Alignment.TopCenter).padding(top = 78.dp), status = apiStatus)
                     LocationButton(
                         modifier = Modifier.align(Alignment.BottomEnd),
                         onRequestLocation = onRequestLocation,
@@ -51,6 +52,15 @@ fun LocusGpsApp(location: UserLocation?, hasMapTilerKey: Boolean, onRequestLocat
             }
         }
     }
+}
+
+@Composable
+private fun ApiStatus(modifier: Modifier, status: String) = Surface(
+    modifier = modifier,
+    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+    shape = RoundedCornerShape(12.dp),
+) {
+    Text(status, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color(0xFFBBC7D3))
 }
 
 @Composable

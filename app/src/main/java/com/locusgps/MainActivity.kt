@@ -8,13 +8,20 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import com.locusgps.location.LocationRepository
 import com.locusgps.ui.LocusGpsApp
+import com.locusgps.api.ApiClient
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val locationRepository by lazy { LocationRepository(applicationContext) }
+    private val apiClient by lazy { ApiClient() }
+    private var apiStatus by mutableStateOf("Comprobando API…")
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { permissions ->
@@ -30,8 +37,13 @@ class MainActivity : ComponentActivity() {
             LocusGpsApp(
                 location = location,
                 hasMapTilerKey = BuildConfig.MAPTILER_KEY.isNotBlank(),
+                apiStatus = apiStatus,
                 onRequestLocation = ::requestLocation,
             )
+        }
+        lifecycleScope.launch {
+            apiStatus = apiClient.health()
+                .fold({ "API conectada" }, { "API no disponible" })
         }
         requestLocation()
     }
