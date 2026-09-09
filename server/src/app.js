@@ -28,6 +28,13 @@ app.use((req, res, next) => {
 });
 
 app.use(healthRouter);
+app.get('/', (req, res) => {
+  res.json({
+    service: 'locus-gps-api',
+    status: 'running',
+    health: '/health',
+  });
+});
 app.use(authenticateDevice);
 app.use(locationRouter);
 app.use(favoritesRouter);
