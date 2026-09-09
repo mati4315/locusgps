@@ -5,7 +5,10 @@ import { pool } from '../db/pool.js';
 export async function authenticateDevice(req, res, next) {
   const header = req.get('authorization') ?? '';
   const [scheme, token] = header.split(' ');
-  if (scheme !== 'Bearer' || !token || !env.deviceTokenHash) {
+  if (!env.deviceTokenHash) {
+    return res.status(503).json({ error: 'auth_not_configured' });
+  }
+  if (scheme !== 'Bearer' || !token) {
     return res.status(401).json({ error: 'unauthorized' });
   }
 
