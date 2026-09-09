@@ -1,0 +1,1145 @@
+Claro. Te preparo un prompt maestro para tu desarrollador, pensado para que no tenga que improvisar decisiones de arquitectura y siga la guía v5: Android como núcleo de navegación, Hostinger + Node.js + MySQL como backend ligero, y la capa de puntos personalizados optimizada para consumir lo mínimo.
+
+PROMPT MAESTRO — DESARROLLO DE LA APP ANDROID
+
+Quiero desarrollar una aplicación Android de navegación GPS personal siguiendo estrictamente la arquitectura definida en el proyecto “Navegador GPS personal con ubicación en tiempo real”, versión v6 — MapLibre + MapTiler + OpenStreetMap + GraphHopper + Hostinger + MySQL + puntos personalizados.
+
+La prioridad absoluta es:
+
+1. Navegación GPS rápida y fiable.
+2. Bajo consumo de batería, datos móviles y servidor.
+3. Arquitectura sencilla y mantenible.
+4. Privacidad del usuario.
+5. No depender de servicios innecesarios.
+6. La IA debe ser completamente opcional y nunca puede ser necesaria para que funcione la navegación.
+
+La aplicación debe sentirse como un navegador GPS moderno, sencillo y práctico, pero debe estar optimizada para ser utilizada por una sola persona con un único dispositivo Android.
+
+---
+
+1. CONCEPTO GENERAL
+
+La aplicación será principalmente un navegador GPS personal.
+
+El teléfono Android debe realizar localmente todo lo que pueda:
+
+- obtener GPS;
+- mostrar la posición;
+- mostrar el mapa;
+- seguir la ruta;
+- calcular el progreso;
+- detectar si el usuario se ha salido de la ruta;
+- solicitar recálculo cuando sea necesario;
+- mostrar puntos personalizados;
+- detectar proximidad a cámaras/puntos de alerta;
+- reproducir instrucciones de voz;
+- mantener una caché local.
+
+El servidor Hostinger debe actuar como una capa ligera de coordinación:
+
+ANDROID
+GPS
+MAPA
+NAVEGACIÓN
+CACHÉ
+ALERTAS
+VOZ
+        │
+        │ HTTPS
+        ▼
+HOSTINGER
+Node.js + Express
+        │
+        ├── MySQL
+        ├── Routing Provider
+        ├── Places / Geocoding Provider
+        └── IA opcional
+
+No convertir el servidor en un sistema que procese continuamente el GPS.
+
+---
+
+2. DISEÑO VISUAL
+
+Utilizar como referencia visual la imagen conceptual proporcionada junto con este prompt.
+
+La interfaz debe ser:
+
+- moderna;
+- limpia;
+- oscura;
+- fácil de utilizar mientras se conduce;
+- con botones grandes;
+- con pocos elementos innecesarios;
+- con buena legibilidad;
+- preparada para funcionar en diferentes tamaños de pantalla Android.
+
+No se debe copiar literalmente ninguna aplicación comercial.
+
+La referencia visual solamente define el estilo y la organización general.
+
+La navegación debe ser el elemento principal de la aplicación.
+
+---
+
+3. PANTALLA PRINCIPAL — MAPA
+
+La pantalla principal debe mostrar:
+
+- mapa;
+- posición actual del usuario;
+- orientación del vehículo;
+- zoom;
+- botón para volver a mi ubicación;
+- buscador superior;
+- puntos personalizados;
+- puntos de interés;
+- controles de navegación.
+
+Ejemplo conceptual:
+
+┌──────────────────────────────┐
+│ 🔍 Buscar lugar o dirección  │
+├──────────────────────────────┤
+│                              │
+│          MAPA                │
+│                              │
+│       📷                     │
+│            🚗                │
+│                  ⭐          │
+│                              │
+│       ⚠️                     │
+│                              │
+│                     +        │
+│                     -        │
+│                  ◎ ubicación │
+│                              │
+├──────────────────────────────┤
+│  Mapa    Navegar   Lugares   Más │
+└──────────────────────────────┘
+
+La posición del usuario debe actualizarse localmente.
+
+No enviar cada actualización GPS al servidor.
+
+---
+
+4. BÚSQUEDA Y DESTINOS
+
+El usuario debe poder introducir:
+
+- dirección;
+- ciudad;
+- negocio;
+- restaurante;
+- gasolinera;
+- parking;
+- lugar de interés;
+- coordenadas;
+- punto guardado.
+
+La búsqueda se realiza mediante el backend:
+
+Android
+   ↓
+GET /api/search
+   ↓
+Hostinger
+   ↓
+Proveedor de búsqueda/geocodificación
+   ↓
+Android
+
+Los resultados deben ser mínimos y relevantes.
+
+No descargar grandes cantidades de información.
+
+Si el usuario selecciona un resultado:
+
+Lugar
+ ↓
+Ver detalles
+ ↓
+Ir
+ ↓
+Solicitar ruta
+
+---
+
+5. CÁLCULO DE RUTA
+
+El routing debe estar abstraído mediante un proveedor.
+
+La aplicación no debe quedar acoplada directamente a un único proveedor.
+
+En la V1, el proveedor concreto de routing será GraphHopper, pero siempre detrás de una abstracción interna.
+
+En el backend utilizar una interfaz conceptual:
+
+calculateRoute(origin, destination, mode)
+
+Para la V1 el proveedor seleccionado es:
+
+- GraphHopper.
+
+IMPORTANTE:
+El backend debe mantener una abstracción `routingProvider`, de modo que GraphHopper pueda sustituirse en el futuro por OSRM, Valhalla u otro proveedor compatible sin modificar la aplicación Android.
+
+No utilizar directamente desde Android la API de GraphHopper ni acoplar la app a su formato interno.
+
+La Android app solamente debe conocer el formato de ruta que devuelve nuestra API.
+
+Ejemplo:
+
+Android
+   ↓
+POST /api/routes
+   ↓
+Hostinger
+   ↓
+routingProvider
+   ↓
+Ruta
+   ↓
+Android
+
+---
+
+6. NAVEGACIÓN ACTIVA
+
+Cuando comienza una navegación, Android debe mantener localmente:
+
+ruta actual
+posición GPS
+segmento actual
+próxima maniobra
+distancia restante
+tiempo estimado
+velocidad
+puntos de alerta
+
+La interfaz debe mostrar claramente:
+
+┌───────────────────────────┐
+│        ↱                  │
+│       300 m               │
+│     Av. San Martín        │
+├───────────────────────────┤
+│                           │
+│          MAPA             │
+│                           │
+│             🚗            │
+│                           │
+├───────────────────────────┤
+│ 12 min        4,8 km      │
+│                           │
+│              FINALIZAR    │
+└───────────────────────────┘
+
+La información realmente importante debe estar visible sin obligar al usuario a interactuar constantemente con la pantalla.
+
+---
+
+7. RECALCULACIÓN DE RUTA
+
+NO solicitar una nueva ruta con cada actualización GPS.
+
+La lógica debe ser aproximadamente:
+
+GPS
+ ↓
+¿Estoy cerca de la ruta?
+ ↓ sí
+Continuar navegación local
+ ↓ no
+¿Estoy suficientemente fuera de ruta?
+ ↓ sí
+Solicitar nueva ruta
+
+Debe existir un umbral configurable para evitar recalculaciones innecesarias.
+
+Esto reduce:
+
+- tráfico;
+- uso de datos;
+- consumo del servidor;
+- consumo de batería;
+- llamadas al proveedor de routing.
+
+---
+
+8. PUNTOS PERSONALIZADOS
+
+La aplicación debe incluir una capa propia llamada:
+
+map_points
+
+Estos puntos son independientes de OSM y de los proveedores externos.
+
+Tipos iniciales:
+
+favorite
+camera
+speed_camera
+traffic_light_camera
+danger
+school_zone
+fuel
+parking
+rest_area
+custom
+
+Ejemplos:
+
+Casa
+Trabajo
+Cámara de velocidad
+Cámara de semáforo
+Zona peligrosa
+Colegio
+Gasolinera
+Parking
+Lugar favorito
+Punto personalizado
+
+---
+
+9. BASE DE DATOS DE PUNTOS
+
+Utilizar una única tabla genérica:
+
+map_points
+--------------------------------
+id
+user_id
+type
+name
+latitude
+longitude
+description
+enabled
+alert_enabled
+direction
+source
+verified_at
+created_at
+updated_at
+
+No crear una tabla diferente para cámaras, favoritos, peligros, etc.
+
+El campo "type" determina el comportamiento.
+
+Para un solo usuario no introducir estructuras innecesariamente complejas.
+
+---
+
+10. CREAR PUNTOS DESDE ANDROID
+
+Debe ser posible:
+
+Guardar ubicación actual
+
+Mantener pulsado sobre el mapa
+        ↓
+Guardar este lugar
+        ↓
+Elegir tipo
+        ↓
+Nombre
+        ↓
+Guardar
+
+Marcar cámara
+
+Posición actual
+      ↓
+"Marcar cámara"
+      ↓
+speed_camera
+      ↓
+Guardar
+
+También debe poder crearse un punto tocando cualquier ubicación del mapa.
+
+---
+
+11. API DE PUNTOS
+
+Implementar:
+
+GET    /api/map-points?lat=&lon=&radius=&type=
+POST   /api/map-points
+PATCH  /api/map-points/:id
+DELETE /api/map-points/:id
+
+Ejemplo:
+
+{
+  "type": "speed_camera",
+  "name": "Cámara de velocidad",
+  "latitude": -27.000000,
+  "longitude": 153.000000,
+  "description": "",
+  "enabled": true,
+  "alert_enabled": true
+}
+
+Validar siempre:
+
+- coordenadas;
+- tipo;
+- usuario;
+- valores booleanos;
+- tamaño de texto.
+
+---
+
+12. OPTIMIZACIÓN DE CÁMARAS Y PUNTOS
+
+Esta parte es MUY importante.
+
+NO hacer:
+
+GPS → servidor → MySQL
+GPS → servidor → MySQL
+GPS → servidor → MySQL
+GPS → servidor → MySQL
+
+continuamente.
+
+En su lugar:
+
+Android obtiene ruta
+        ↓
+solicita puntos relevantes
+        ↓
+Hostinger devuelve pocos puntos
+        ↓
+Android los guarda temporalmente
+        ↓
+Android calcula proximidad LOCALMENTE
+
+Durante la navegación, Android debe comprobar localmente:
+
+¿Estoy acercándome a una cámara?
+¿Está habilitada?
+¿Tiene alerta activada?
+¿Está en mi sentido?
+¿Ya avisé de ella?
+
+El servidor no necesita participar en cada alerta.
+
+---
+
+13. CARGA DE PUNTOS POR CORREDOR
+
+Para una ruta activa no descargar todos los puntos de una ciudad.
+
+Utilizar un pequeño corredor alrededor de la ruta.
+
+Conceptualmente:
+
+          ● cámara
+
+=============================
+       corredor de ruta
+=============================
+             🚗
+=============================
+          ● peligro
+
+El servidor devuelve únicamente los puntos relevantes dentro de esa zona.
+
+Cuando la ruta cambia significativamente:
+
+nueva ruta
+   ↓
+nuevo corredor
+   ↓
+nuevos puntos
+
+Si la ruta continúa prácticamente igual, no volver a descargarlos.
+
+---
+
+14. CACHÉ LOCAL
+
+Android debe disponer de una caché local ligera para:
+
+- puntos personalizados;
+- favoritos;
+- configuración;
+- última ruta;
+- datos temporales necesarios para navegación.
+
+La caché debe tener caducidad cuando corresponda.
+
+No almacenar indefinidamente información innecesaria.
+
+La aplicación debe poder seguir navegando con los datos ya descargados aunque exista una interrupción temporal de conexión.
+
+---
+
+15. ALERTAS DE CÁMARAS
+
+Cuando una cámara esté próxima:
+
+GPS local
+   ↓
+distancia a cámara
+   ↓
+¿está dentro del umbral?
+   ↓
+¿ya se avisó?
+   ↓
+mostrar alerta
+   ↓
+voz opcional
+
+Ejemplo visual:
+
+┌────────────────────────────┐
+│ 📷 Cámara de velocidad     │
+│                            │
+│          350 m             │
+└────────────────────────────┘
+
+No repetir el mismo aviso continuamente.
+
+Cada punto debe tener un estado local de:
+
+avisado / no avisado
+
+Ese estado se reinicia cuando corresponda, por ejemplo cuando el usuario se aleja suficientemente del punto o inicia una nueva navegación.
+
+---
+
+16. DIRECCIÓN DE LAS CÁMARAS
+
+El campo:
+
+direction
+
+debe permitir en el futuro distinguir cámaras según sentido.
+
+No todas las cámaras deben generar alerta para todos los vehículos.
+
+Si "direction" no está definido:
+
+considerar cámara aplicable a ambos sentidos
+
+Si está definido:
+
+comparar dirección de desplazamiento
+
+Esta lógica debe ejecutarse localmente.
+
+---
+
+17. FIABILIDAD DE LAS CÁMARAS
+
+Una cámara introducida manualmente por el usuario NO debe considerarse automáticamente una fuente oficial.
+
+Utilizar:
+
+source
+verified_at
+
+Por ejemplo:
+
+source = user
+source = imported
+source = external
+
+Y opcionalmente:
+
+verified_at = fecha
+
+La interfaz puede mostrar posteriormente si un punto está verificado o pendiente.
+
+---
+
+18. CAPAS DEL MAPA
+
+Debe existir una pantalla:
+
+Capas y puntos de interés
+
+Con interruptores para:
+
+Puntos de interés
+Cámaras de velocidad
+Cámaras de semáforo
+Zonas de peligro
+Colegios
+Parkings
+Gasolineras
+Restaurantes
+Favoritos
+
+Importante:
+
+Si una capa está desactivada, Android no debe seguir procesando ni mostrando innecesariamente esos puntos.
+
+---
+
+19. FAVORITOS
+
+Pantalla:
+
+Favoritos
+
+Ejemplo:
+
+Casa
+Trabajo
+Supermercado
+Café
+Parque
+
+Acciones:
+
+Navegar
+Editar
+Eliminar
+
+Un favorito debe ser simplemente un "map_point" de tipo:
+
+favorite
+
+No crear otra estructura de datos si no es necesaria.
+
+---
+
+20. PANTALLA DE DETALLE
+
+Al seleccionar un lugar:
+
+Imagen / mapa
+
+Nombre
+Dirección
+Distancia
+
+[ IR ]
+[ GUARDAR ]
+[ COMPARTIR ]
+
+Añadir a favoritos
+
+La información debe ser sencilla.
+
+No cargar datos externos que el usuario no necesita.
+
+---
+
+21. CONFIGURACIÓN
+
+Crear una pantalla de ajustes con:
+
+Navegación
+
+- modo de transporte;
+- instrucciones de voz;
+- volumen;
+- vista del mapa;
+- comportamiento del recálculo.
+
+Alertas
+
+- cámaras;
+- peligros;
+- puntos personalizados;
+- distancia de aviso.
+
+Datos
+
+- sincronización;
+- caché;
+- uso de datos.
+
+Privacidad
+
+- qué información se almacena;
+- ubicación;
+- sincronización con servidor.
+
+---
+
+22. PRIVACIDAD
+
+La ubicación es un dato sensible.
+
+Regla:
+
+No enviar GPS continuamente al servidor.
+
+Si el servidor necesita conocer la última ubicación por alguna función concreta, enviar solamente lo necesario y con una frecuencia baja.
+
+La navegación normal debe funcionar sin enviar constantemente la posición.
+
+No enviar la ubicación a la IA.
+
+No enviar el historial GPS a servicios externos.
+
+No guardar historial de trayectos salvo que posteriormente se implemente explícitamente esa función.
+
+---
+
+23. HOSTINGER
+
+El backend debe ser compatible con el entorno Node.js administrado de Hostinger definido en la guía del proyecto.
+
+Tecnología:
+
+Node.js
+Express
+HTTPS
+JSON
+MySQL
+MapTiler (tiles desde Android)
+GraphHopper (routing desde backend)
+
+No introducir inicialmente:
+
+Docker
+Redis
+Kubernetes
+microservicios
+WebSockets
+PostGIS
+VPS
+colas
+balanceadores
+
+salvo que exista una necesidad real.
+
+La arquitectura debe poder evolucionar posteriormente si el proyecto crece.
+
+---
+
+24. MYSQL
+
+La base de datos debe almacenar solamente la información necesaria.
+
+Inicialmente:
+
+users
+devices
+current_location
+favorites
+settings
+map_points
+
+No guardar:
+
+- GPS cada segundo;
+- historial completo de rutas;
+- mapas completos;
+- teselas;
+- enormes respuestas de proveedores;
+- instrucciones de navegación permanentes;
+- respuestas completas de IA;
+- información duplicada innecesariamente.
+
+---
+
+25. MAPA, MAPTILER Y OPENSTREETMAP
+
+La V1 utilizará esta combinación:
+
+- MapLibre Native Android = motor de visualización del mapa;
+- MapTiler = proveedor de tiles;
+- OpenStreetMap (OSM) = fuente de datos cartográficos.
+
+Diferenciar claramente:
+
+MapLibre = renderizado y gestión del mapa en Android
+MapTiler = servicio que proporciona los tiles utilizados por MapLibre
+OSM = datos cartográficos de referencia
+GraphHopper = cálculo de rutas
+Places/Geocoding = búsqueda y geocodificación
+
+La aplicación NO debe descargar ni almacenar el mapa completo en MySQL.
+
+No utilizar los servidores públicos de tiles de OpenStreetMap como backend ilimitado de producción.
+
+Mantener el proveedor de tiles desacoplado de la lógica de navegación. La configuración de MapTiler debe estar centralizada para poder sustituir el proveedor de tiles en el futuro sin rehacer la arquitectura.
+
+Respetar siempre:
+
+- atribución de OSM y del proveedor correspondiente;
+- políticas de uso;
+- límites de solicitudes;
+- condiciones de MapTiler;
+- condiciones de GraphHopper;
+- condiciones de cualquier otro proveedor utilizado.
+
+No asumir que ningún servicio público o gratuito es ilimitado.
+
+---
+
+26. IA
+
+La IA es opcional.
+
+Debe utilizarse únicamente para funciones como:
+
+"Busca un restaurante tranquilo cerca"
+"Quiero una gasolinera barata"
+"¿Qué puedo visitar cerca?"
+
+La IA puede convertir lenguaje natural en una búsqueda estructurada.
+
+Ejemplo:
+
+Usuario:
+"Busca un restaurante italiano cerca"
+
+Android
+ ↓
+Hostinger
+ ↓
+IA opcional
+ ↓
+criterios de búsqueda
+ ↓
+Places
+ ↓
+resultado
+
+La IA NO debe controlar:
+
+- GPS;
+- navegación;
+- seguimiento de ruta;
+- recálculo crítico;
+- detección de proximidad;
+- alertas de cámaras.
+
+Si la IA deja de funcionar, la navegación debe continuar funcionando normalmente.
+
+---
+
+27. RENDIMIENTO
+
+Priorizar:
+
+menos llamadas de red
+menos datos
+menos procesamiento
+menos escritura en disco
+menos consultas MySQL
+menos consumo de GPS
+menos consumo de batería
+
+Siempre que una operación pueda hacerse localmente en Android sin perjudicar la arquitectura, preferir Android.
+
+No crear una petición HTTP simplemente porque sea técnicamente posible.
+
+---
+
+28. ACTUALIZACIÓN DE GPS
+
+El GPS debe adaptarse al estado de la aplicación.
+
+Cuando no se está navegando:
+
+frecuencia baja
+
+Durante navegación:
+
+frecuencia suficiente para navegación fluida
+
+No utilizar una frecuencia máxima permanentemente.
+
+La precisión y frecuencia deben equilibrarse con:
+
+- batería;
+- velocidad;
+- movimiento;
+- necesidad real de navegación.
+
+---
+
+29. ARQUITECTURA ANDROID
+
+Mantener una separación clara entre:
+
+UI
+ ↓
+ViewModel / estado
+ ↓
+Navigation Engine
+ ↓
+Location Provider
+ ↓
+Local Cache
+ ↓
+API Client
+
+La lógica de navegación no debe estar mezclada con las pantallas.
+
+Las alertas de puntos deben ser un componente independiente.
+
+Por ejemplo:
+
+NavigationEngine
+PointAlertEngine
+LocationManager
+RouteManager
+SearchManager
+ApiClient
+LocalRepository
+
+No es obligatorio utilizar exactamente estos nombres, pero sí mantener estas responsabilidades separadas.
+
+---
+
+30. MANEJO DE ERRORES
+
+La aplicación debe asumir que:
+
+- no hay internet;
+- el servidor no responde;
+- el proveedor de routing falla;
+- el proveedor de búsqueda falla;
+- MySQL no está disponible;
+- el GPS pierde precisión.
+
+Nunca bloquear toda la aplicación por un fallo de un servicio secundario.
+
+Ejemplo:
+
+Routing falla
+→ mostrar error
+→ conservar navegación anterior si es posible
+
+Puntos fallan
+→ continuar navegación
+→ utilizar caché disponible
+
+IA falla
+→ navegación y búsqueda normal siguen funcionando
+
+---
+
+31. SEGURIDAD
+
+Implementar:
+
+- HTTPS;
+- autenticación;
+- tokens seguros;
+- almacenamiento seguro del token en Android;
+- validación de coordenadas;
+- rate limiting;
+- CORS limitado;
+- variables de entorno;
+- consultas SQL parametrizadas;
+- protección contra inyección SQL;
+- no exponer MySQL públicamente.
+
+Nunca incluir:
+
+contraseñas
+tokens
+claves API
+credenciales MySQL
+
+dentro del código Android.
+
+---
+
+32. EXPERIENCIA DE USUARIO
+
+La aplicación debe priorizar conducción segura.
+
+Por eso:
+
+- botones grandes;
+- poco texto durante navegación;
+- alto contraste;
+- información esencial;
+- instrucciones claras;
+- voz opcional;
+- no exigir interacción constante.
+
+No sobrecargar el mapa con cientos de iconos.
+
+Si existen muchos puntos cercanos, agruparlos o mostrar únicamente los relevantes.
+
+---
+
+33. ORDEN DE DESARROLLO
+
+No desarrollar todo simultáneamente.
+
+Implementar en este orden:
+
+Fase 1
+
+Proyecto Android
+Mapa
+Permisos GPS
+Posición actual
+
+Fase 2
+
+Búsqueda
+Selección de destino
+Routing
+Dibujar ruta
+
+Fase 3
+
+Navegación activa
+Progreso
+Maniobras
+Voz
+Salida de ruta
+Recalculación
+
+Fase 4
+
+Backend Hostinger
+Autenticación
+MySQL
+Sincronización
+
+Fase 5
+
+map_points
+Favoritos
+Cámaras
+Peligros
+Capas
+
+Fase 6
+
+Caché
+Optimización
+Alertas locales
+
+Fase 7
+
+Places
+Búsqueda avanzada
+
+Fase 8
+
+IA opcional
+
+---
+
+34. REGLA FUNDAMENTAL DEL PROYECTO
+
+Antes de añadir cualquier funcionalidad, preguntarse:
+
+¿Es necesaria?
+¿Puede hacerse localmente?
+¿Necesita realmente consultar el servidor?
+¿Podemos almacenar menos?
+¿Podemos enviar menos datos?
+¿Podemos reducir las consultas?
+¿Aumenta el consumo de batería?
+¿Aumenta innecesariamente la complejidad?
+
+Si una solución hace lo mismo consumiendo menos recursos, utilizar la solución más sencilla.
+
+---
+
+35. OBJETIVO FINAL
+
+El resultado debe ser una aplicación Android que se comporte como un navegador GPS personal completo:
+
+┌───────────────────────────────────┐
+│           NAVEGADOR GPS            │
+├───────────────────────────────────┤
+│                                   │
+│              MAPA                 │
+│                                   │
+│       🚗                           │
+│          ━━━━━━━▶                │
+│                📷                 │
+│                         ⭐        │
+│                                   │
+├───────────────────────────────────┤
+│ Próxima maniobra                  │
+│ ↱ 300 m · Av. San Martín          │
+├───────────────────────────────────┤
+│ 12 min     4,8 km      Llegada    │
+└───────────────────────────────────┘
+
+Arquitectura tecnológica cerrada para la V1:
+
+- Android + MapLibre Native;
+- MapTiler para tiles;
+- OpenStreetMap como base de datos cartográfica;
+- GraphHopper para routing;
+- Hostinger + Node.js/Express;
+- MySQL.
+
+Con:
+
+- navegación GPS;
+- búsqueda;
+- routing;
+- favoritos;
+- puntos personalizados;
+- cámaras;
+- zonas de peligro;
+- capas;
+- alertas;
+- voz;
+- caché local;
+- backend Hostinger;
+- MySQL;
+- privacidad;
+- IA opcional.
+
+Pero siempre manteniendo esta regla:
+
+Android hace el trabajo de navegación. Hostinger coordina. MySQL guarda lo necesario.
+
+No convertir el proyecto en una arquitectura empresarial innecesariamente compleja.
+
+El objetivo no es tener más servidores ni más servicios.
+
+El objetivo es tener un navegador GPS personal rápido, privado, económico y eficiente.Este prompt está pensado para dárselo directamente al desarrollador junto con el README v6 y la imagen conceptual de la interfaz. El desarrollador debe tomar este prompt y el README v6 como documentación base del proyecto. Las decisiones de implementación menores quedan a criterio técnico del desarrollador, pero no debe sustituir los componentes principales definidos aquí sin consultarlo previamente.
+
+
+No cambiar la arquitectura ni sustituir MapLibre, MapTiler, GraphHopper, Hostinger o MySQL sin consultarlo previamente.
+Y que construya la V1 por fases:
+FASE 1
+Android + MapLibre + MapTiler + OSM
+        ↓
+GPS + posición + mapa
+
+FASE 2
+Hostinger + Node.js + MySQL
+        ↓
+API + autenticación
+
+FASE 3
+GraphHopper mediante routingProvider
+        ↓
+Cálculo de rutas
+
+FASE 4
+Navegación
+        ↓
+maniobras + distancia + ETA + voz
+        ↓
+recalcular cuando haya desvío
+
+FASE 5
+Favoritos + puntos personalizados
+        ↓
+cámaras + alertas
+
+FASE 6
+Búsqueda + lugares
+
+FASE 7
+IA opcional

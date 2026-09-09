@@ -1,0 +1,3 @@
+# Copy this file to maptiler.properties and provide your own MapTiler key.
+# This file is ignored by Git; do not add the key to source code.
+MAPTILER_KEY=replace-with-your-key
