@@ -17,13 +17,28 @@ locationRouter.post('/api/location', async (req, res, next) => {
     if (latitude == null || longitude == null || (accuracy == null && req.body?.accuracy != null) || Number.isNaN(recordedAt.getTime())) {
       return res.status(400).json({ error: 'invalid_location' });
     }
-    // Device resolution is deliberately deferred until device registration is added.
-    res.status(202).json({ accepted: true, stored: false });
+    await pool.execute(
+      `INSERT INTO current_location (device_id, latitude, longitude, accuracy, recorded_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE latitude = VALUES(latitude), longitude = VALUES(longitude),
+       accuracy = VALUES(accuracy), recorded_at = VALUES(recorded_at)`,
+      [req.device.deviceId, latitude, longitude, accuracy, recordedAt],
+    );
+    res.status(202).json({ accepted: true, stored: true });
   } catch (error) {
     next(error);
   }
 });
 
-locationRouter.get('/api/location', (req, res) => {
-  res.status(501).json({ error: 'device_registration_required' });
+locationRouter.get('/api/location', async (req, res, next) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT latitude, longitude, accuracy, recorded_at AS recordedAt, updated_at AS updatedAt
+       FROM current_location WHERE device_id = ? LIMIT 1`,
+      [req.device.deviceId],
+    );
+    res.json(rows[0] ?? null);
+  } catch (error) {
+    next(error);
+  }
 });
