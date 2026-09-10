@@ -33,6 +33,7 @@ import com.locusgps.location.UserLocation
 import com.locusgps.api.RouteResult
 import com.locusgps.api.SearchPlace
 import com.locusgps.map.MapScreen
+import com.locusgps.navigation.NavigationEngine
 
 private val DarkColors = darkColorScheme(
     primary = Color(0xFF67D4FF),
@@ -50,6 +51,7 @@ fun LocusGpsApp(location: UserLocation?, route: RouteResult?, searchResults: Lis
                     SearchBar(modifier = Modifier.align(Alignment.TopCenter), results = searchResults, searching = searching, onSearch = onSearch, onSelectPlace = onSelectPlace)
                     ApiStatus(modifier = Modifier.align(Alignment.TopCenter).padding(top = 78.dp), status = apiStatus)
                     route?.let { NavigationSummary(modifier = Modifier.align(Alignment.TopStart).padding(top = 128.dp), distanceMeters = it.distanceMeters, durationSeconds = it.durationSeconds) }
+                    route?.let { NavigationEngine.update(it, location)?.let { state -> NavigationStateBanner(modifier = Modifier.align(Alignment.TopStart).padding(top = 182.dp), state.offRoute) } }
                     LocationButton(
                         modifier = Modifier.align(Alignment.BottomEnd),
                         onRequestLocation = onRequestLocation,
@@ -59,6 +61,15 @@ fun LocusGpsApp(location: UserLocation?, route: RouteResult?, searchResults: Lis
                 }
                 BottomNavigation()
             }
+        }
+    }
+}
+
+@Composable
+private fun NavigationStateBanner(modifier: Modifier, offRoute: Boolean) {
+    if (offRoute) {
+        Surface(modifier = modifier.padding(horizontal = 16.dp), color = Color(0xFF7D2D2D), shape = RoundedCornerShape(12.dp)) {
+            Text("Fuera de ruta · preparando recálculo", modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = Color.White)
         }
     }
 }
