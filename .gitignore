@@ -9,3 +9,4 @@ node_modules/
 
 # Never commit runtime secrets.
 maptiler.properties
+api.properties

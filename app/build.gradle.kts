@@ -19,6 +19,13 @@ val apiBaseUrl = (providers.gradleProperty("API_BASE_URL").orNull ?: "https://lo
     .trimEnd('/')
     .replace("\\", "\\\\")
     .replace("\"", "\\\"")
+val apiTokenProperties = Properties().apply {
+    val propertiesFile = rootProject.file("api.properties")
+    if (propertiesFile.exists()) propertiesFile.inputStream().use(::load)
+}
+val apiToken = (apiTokenProperties.getProperty("API_TOKEN")
+    ?: providers.gradleProperty("API_TOKEN").orNull
+    ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
 
 android {
     namespace = "com.locusgps"
@@ -33,6 +40,7 @@ android {
 
         buildConfigField("String", "MAPTILER_KEY", "\"$mapTilerKey\"")
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        buildConfigField("String", "API_TOKEN", "\"$apiToken\"")
     }
 
     buildFeatures {

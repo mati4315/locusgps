@@ -1,0 +1,2 @@
+# Copy to api.properties. Never commit the real file.
+API_TOKEN=replace-with-private-device-token
