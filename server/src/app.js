@@ -8,6 +8,7 @@ import { healthRouter } from './routes/health.js';
 import { locationRouter } from './routes/location.js';
 import { favoritesRouter } from './routes/favorites.js';
 import { routesRouter } from './routes/routes.js';
+import { searchRouter } from './routes/search.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -37,6 +38,7 @@ app.get('/', (req, res) => {
   });
 });
 app.use(authenticateDevice);
+app.use(searchRouter);
 app.use(locationRouter);
 app.use(favoritesRouter);
 app.use(routesRouter);

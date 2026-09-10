@@ -22,6 +22,7 @@ export const env = {
     apiKey: process.env.GRAPHHOPPER_API_KEY ?? '',
     baseUrl: (process.env.GRAPHHOPPER_BASE_URL ?? 'https://graphhopper.com/api/1').replace(/\/$/, ''),
   },
+  maptilerApiKey: process.env.MAPTILER_API_KEY ?? '',
   corsOrigins: (process.env.CORS_ORIGINS ?? '')
     .split(',')
     .map((origin) => origin.trim())
