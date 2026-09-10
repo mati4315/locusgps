@@ -1,7 +1,9 @@
 package com.locusgps
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -33,6 +35,8 @@ import kotlin.math.PI
 import kotlin.random.Random
 import com.locusgps.settings.SettingsRepository
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 
 class MainActivity : ComponentActivity() {
     private val locationRepository by lazy { LocationRepository(applicationContext) }
@@ -119,8 +123,13 @@ class MainActivity : ComponentActivity() {
                 val now = System.currentTimeMillis()
                 if (now - lastPointsFetchAt >= 60_000) {
                     lastPointsFetchAt = now
-                    apiClient.mapPoints(RoutePoint(currentLocation.latitude, currentLocation.longitude))
-                        .onSuccess { mapPoints = it }
+                    val currentPoint = RoutePoint(currentLocation.latitude, currentLocation.longitude)
+                    var personalPoints = emptyList<MapPoint>()
+                    apiClient.mapPoints(currentPoint)
+                        .onSuccess { personalPoints = it }
+                    apiClient.cameraLocations(currentPoint)
+                        .onSuccess { officialPoints -> mapPoints = personalPoints + officialPoints }
+                        .onFailure { mapPoints = personalPoints }
                 }
                 pointAlertEngine.update(mapPoints, RoutePoint(currentLocation.latitude, currentLocation.longitude))?.let { alert ->
                     pointAlert = "${alert.title} · ${alert.distanceMeters.toInt()} m"
@@ -142,7 +151,43 @@ class MainActivity : ComponentActivity() {
             }
         }
         requestLocation()
+        handleExternalNavigation(intent)
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleExternalNavigation(intent)
+    }
+
+    private fun handleExternalNavigation(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_VIEW) return
+        val point = intent.data?.let(::pointFromUri) ?: return
+        lifecycleScope.launch {
+            val location = locationRepository.location.filterNotNull().first()
+            routeToPoint(point, location)
+        }
+    }
+
+    private fun pointFromUri(uri: Uri): RoutePoint? {
+        if (uri.scheme == "locusgps" && uri.host == "navigate") {
+            val latitude = uri.getQueryParameter("lat")?.toDoubleOrNull()
+            val longitude = uri.getQueryParameter("lon")?.toDoubleOrNull()
+            return validPoint(latitude, longitude)
+        }
+        if (uri.scheme == "geo") {
+            val raw = uri.schemeSpecificPart.substringBefore('?')
+            val direct = raw.split(',').takeIf { it.size >= 2 }
+            val latitude = direct?.getOrNull(0)?.toDoubleOrNull()
+            val longitude = direct?.getOrNull(1)?.toDoubleOrNull()
+            if (latitude != null && longitude != null && (latitude != 0.0 || longitude != 0.0)) return validPoint(latitude, longitude)
+            val query = uri.getQueryParameter("q")?.substringBefore('(')?.split(',')
+            return validPoint(query?.getOrNull(0)?.toDoubleOrNull(), query?.getOrNull(1)?.toDoubleOrNull())
+        }
+        return null
+    }
+
+    private fun validPoint(latitude: Double?, longitude: Double?): RoutePoint? = if (latitude != null && longitude != null && latitude in -90.0..90.0 && longitude in -180.0..180.0) RoutePoint(latitude, longitude) else null
 
     private fun requestDemoRoute(location: com.locusgps.location.UserLocation?) {
         if (location == null) return

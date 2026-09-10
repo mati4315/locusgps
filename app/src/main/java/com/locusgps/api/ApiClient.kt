@@ -92,6 +92,26 @@ class ApiClient(
         }
     }
 
+    suspend fun cameraLocations(location: RoutePoint, radiusMeters: Int = 30_000): Result<List<MapPoint>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val url = URL("$baseUrl/api/camera-locations?lat=${location.latitude}&lon=${location.longitude}&radius=$radiusMeters")
+            val connection = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 8_000
+                readTimeout = 10_000
+            }
+            try {
+                val body = (if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream).bufferedReader().use { it.readText() }
+                if (connection.responseCode !in 200..299) error("HTTP ${connection.responseCode}: $body")
+                val items = JSONObject(body).getJSONArray("results")
+                List(items.length()) { index ->
+                    val item = items.getJSONObject(index)
+                    MapPoint(item.getLong("id"), item.getString("type"), item.getString("name"), item.getDouble("latitude"), item.getDouble("longitude"), item.optBoolean("alertEnabled", true))
+                }
+            } finally { connection.disconnect() }
+        }
+    }
+
     suspend fun createMapPoint(point: RoutePoint, name: String, type: String = "custom"): Result<MapPoint> = withContext(Dispatchers.IO) {
         runCatching {
             require(token.isNotBlank()) { "API_TOKEN no configurado" }

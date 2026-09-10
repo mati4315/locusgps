@@ -14,12 +14,14 @@ import { searchRouter } from './routes/search.js';
 import { mapPointsRouter } from './routes/mapPoints.js';
 import { settingsRouter } from './routes/settings.js';
 import { assistantRouter } from './routes/assistant.js';
+import { cameraLocationsRouter } from './routes/cameraLocations.js';
 
 const app = express();
 const publicDirectory = path.join(path.dirname(fileURLToPath(import.meta.url)), '../public');
 app.disable('x-powered-by');
 app.use(helmet());
-app.use(express.static(publicDirectory, { index: false, maxAge: '1d' }));
+// Android App Links necesita acceder a /.well-known/assetlinks.json.
+app.use(express.static(publicDirectory, { index: false, maxAge: '1d', dotfiles: 'allow' }));
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 app.use(express.json({ limit: '32kb' }));
 app.use((req, res, next) => {
@@ -37,6 +39,7 @@ app.use((req, res, next) => {
 });
 
 app.use(healthRouter);
+app.use(cameraLocationsRouter);
 app.get('/', (req, res) => {
   res.json({
     service: 'locus-gps-api',

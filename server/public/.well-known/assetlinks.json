@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.locusgps",
+      "sha256_cert_fingerprints": [
+        "0B:FD:BA:FF:F3:2E:79:EF:49:57:72:BD:A5:66:5C:6A:7D:47:B5:F3:10:F6:09:F1:F2:01:49:07:94:D6:1B:C0"
+      ]
+    }
+  }
+]
