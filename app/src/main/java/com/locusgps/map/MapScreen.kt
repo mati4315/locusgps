@@ -13,13 +13,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.locusgps.location.UserLocation
 import com.locusgps.api.RouteResult
+import com.locusgps.api.MapPoint
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
+import org.maplibre.android.style.layers.PropertyFactory.circleColor
+import org.maplibre.android.style.layers.PropertyFactory.circleRadius
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -30,7 +34,7 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.location.LocationComponentActivationOptions
 
 @Composable
-fun MapScreen(location: UserLocation?, route: RouteResult?, hasMapTilerKey: Boolean, modifier: Modifier = Modifier) {
+fun MapScreen(location: UserLocation?, route: RouteResult?, mapPoints: List<MapPoint>, hasMapTilerKey: Boolean, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val latestLocation = rememberUpdatedState(location)
     val isLocationPuckReady = remember { mutableStateOf(false) }
@@ -50,6 +54,7 @@ fun MapScreen(location: UserLocation?, route: RouteResult?, hasMapTilerKey: Bool
                                 .build(),
                         )
                         map.locationComponent.isLocationComponentEnabled = true
+                        style.addMapPoints(mapPoints)
                         isLocationPuckReady.value = true
                         latestLocation.value?.let { map.locationComponent.forceLocationUpdate(it.toAndroidLocation()) }
                     }
@@ -91,6 +96,10 @@ fun MapScreen(location: UserLocation?, route: RouteResult?, hasMapTilerKey: Bool
         }
     }
 
+    LaunchedEffect(mapPoints) {
+        mapView.getMapAsync { map -> map.style?.addMapPoints(mapPoints) }
+    }
+
     AndroidView(factory = { mapView }, modifier = modifier)
 }
 
@@ -103,6 +112,16 @@ private fun Style.addRoute(route: RouteResult) {
     getSource(sourceId)?.let { (it as GeoJsonSource).setGeoJson(FeatureCollection.fromFeature(feature)); return }
     addSource(GeoJsonSource(sourceId, FeatureCollection.fromFeature(feature)))
     addLayer(LineLayer(layerId, sourceId).withProperties(lineColor("#4FC3F7"), lineWidth(5f)))
+}
+
+private fun Style.addMapPoints(points: List<MapPoint>) {
+    val sourceId = "locus-points-source"
+    val layerId = "locus-points-layer"
+    val features = points.map { Feature.fromGeometry(Point.fromLngLat(it.longitude, it.latitude)) }
+    val collection = FeatureCollection.fromFeatures(features)
+    getSource(sourceId)?.let { (it as GeoJsonSource).setGeoJson(collection); return }
+    addSource(GeoJsonSource(sourceId, collection))
+    addLayer(CircleLayer(layerId, sourceId).withProperties(circleColor("#FFB74D"), circleRadius(7f)))
 }
 
 private fun UserLocation.toAndroidLocation() = Location("locus-local").apply {

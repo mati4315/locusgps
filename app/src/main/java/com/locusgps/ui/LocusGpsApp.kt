@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.locusgps.location.UserLocation
 import com.locusgps.api.RouteResult
 import com.locusgps.api.SearchPlace
+import com.locusgps.api.MapPoint
 import com.locusgps.map.MapScreen
 import com.locusgps.navigation.NavigationEngine
 
@@ -42,12 +43,12 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun LocusGpsApp(location: UserLocation?, route: RouteResult?, searchResults: List<SearchPlace>, searching: Boolean, hasMapTilerKey: Boolean, apiStatus: String, onRequestLocation: () -> Unit, onRequestDemoRoute: () -> Unit, onSearch: (String) -> Unit, onSelectPlace: (SearchPlace) -> Unit) {
+fun LocusGpsApp(location: UserLocation?, route: RouteResult?, mapPoints: List<MapPoint>, searchResults: List<SearchPlace>, searching: Boolean, voiceEnabled: Boolean, hasMapTilerKey: Boolean, apiStatus: String, onRequestLocation: () -> Unit, onRequestDemoRoute: () -> Unit, onSearch: (String) -> Unit, onSelectPlace: (SearchPlace) -> Unit, onToggleVoice: () -> Unit, onSaveCurrentPoint: () -> Unit) {
     MaterialTheme(colorScheme = DarkColors) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Column {
                 Box(modifier = Modifier.weight(1f)) {
-                    MapScreen(location = location, route = route, hasMapTilerKey = hasMapTilerKey)
+                    MapScreen(location = location, route = route, mapPoints = mapPoints, hasMapTilerKey = hasMapTilerKey)
                     SearchBar(modifier = Modifier.align(Alignment.TopCenter), results = searchResults, searching = searching, onSearch = onSearch, onSelectPlace = onSelectPlace)
                     ApiStatus(modifier = Modifier.align(Alignment.TopCenter).padding(top = 78.dp), status = apiStatus)
                     route?.let { NavigationSummary(modifier = Modifier.align(Alignment.TopStart).padding(top = 128.dp), distanceMeters = it.distanceMeters, durationSeconds = it.durationSeconds) }
@@ -57,6 +58,8 @@ fun LocusGpsApp(location: UserLocation?, route: RouteResult?, searchResults: Lis
                         onRequestLocation = onRequestLocation,
                     )
                     Button(onClick = onRequestDemoRoute, modifier = Modifier.align(Alignment.BottomStart).padding(20.dp)) { Text("Ruta demo") }
+                    Button(onClick = onToggleVoice, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 92.dp, bottom = 28.dp)) { Text(if (voiceEnabled) "Voz: ON" else "Voz: OFF") }
+                    Button(onClick = onSaveCurrentPoint, modifier = Modifier.align(Alignment.BottomStart).padding(start = 20.dp, bottom = 84.dp)) { Text("Guardar punto") }
                     if (!hasMapTilerKey) MissingKeyMessage(modifier = Modifier.align(Alignment.Center))
                 }
                 BottomNavigation()

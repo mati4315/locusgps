@@ -19,19 +19,25 @@ import com.locusgps.api.ApiClient
 import com.locusgps.api.RoutePoint
 import com.locusgps.api.RouteResult
 import com.locusgps.api.SearchPlace
+import com.locusgps.api.MapPoint
 import com.locusgps.navigation.NavigationEngine
+import com.locusgps.navigation.VoiceInstructionEngine
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val locationRepository by lazy { LocationRepository(applicationContext) }
     private val apiClient by lazy { ApiClient() }
+    private val voiceEngine by lazy { VoiceInstructionEngine(applicationContext) }
     private var apiStatus by mutableStateOf("Comprobando API…")
     private var route by mutableStateOf<RouteResult?>(null)
     private var searchResults by mutableStateOf<List<SearchPlace>>(emptyList())
     private var searching by mutableStateOf(false)
+    private var mapPoints by mutableStateOf<List<MapPoint>>(emptyList())
+    private var lastPointsFetchAt = 0L
     private var destination by mutableStateOf<RoutePoint?>(null)
     private var lastRecalculationAt = 0L
     private var recalculating = false
+    private var voiceEnabled by mutableStateOf(false)
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { permissions ->
@@ -49,12 +55,16 @@ class MainActivity : ComponentActivity() {
                 route = route,
                 searchResults = searchResults,
                 searching = searching,
+                mapPoints = mapPoints,
+                voiceEnabled = voiceEnabled,
                 hasMapTilerKey = BuildConfig.MAPTILER_KEY.isNotBlank(),
                 apiStatus = apiStatus,
                 onRequestLocation = ::requestLocation,
                 onRequestDemoRoute = { requestDemoRoute(location) },
                 onSearch = { query -> search(query, location) },
                 onSelectPlace = { place -> selectPlace(place, location) },
+                onToggleVoice = { voiceEnabled = !voiceEnabled; voiceEngine.enabled = voiceEnabled },
+                onSaveCurrentPoint = { saveCurrentPoint(location) },
             )
         }
         lifecycleScope.launch {
@@ -64,13 +74,20 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             locationRepository.location.collect { current ->
                 val currentLocation = current ?: return@collect
+                val now = System.currentTimeMillis()
+                if (now - lastPointsFetchAt >= 60_000) {
+                    lastPointsFetchAt = now
+                    apiClient.mapPoints(RoutePoint(currentLocation.latitude, currentLocation.longitude))
+                        .onSuccess { mapPoints = it }
+                }
                 val activeRoute = route
                 val activeDestination = destination
                 if (activeRoute == null || activeDestination == null || recalculating) return@collect
                 val state = NavigationEngine.update(activeRoute, currentLocation) ?: return@collect
-                val now = System.currentTimeMillis()
-                if (state.offRoute && now - lastRecalculationAt >= 15_000) {
-                    lastRecalculationAt = now
+                voiceEngine.announceNextInstruction(activeRoute, currentLocation)
+                val checkNow = System.currentTimeMillis()
+                if (state.offRoute && checkNow - lastRecalculationAt >= 15_000) {
+                    lastRecalculationAt = checkNow
                     recalculating = true
                     apiClient.route(RoutePoint(currentLocation.latitude, currentLocation.longitude), activeDestination)
                         .onSuccess { route = it; apiStatus = "Ruta recalculada" }
@@ -88,7 +105,7 @@ class MainActivity : ComponentActivity() {
         destination = demoDestination
         lifecycleScope.launch {
             apiClient.route(RoutePoint(location.latitude, location.longitude), demoDestination)
-                .onSuccess { route = it; apiStatus = "Ruta lista" }
+                .onSuccess { route = it; voiceEngine.announceRoute(it.distanceMeters, it.durationSeconds); apiStatus = "Ruta lista" }
                 .onFailure { apiStatus = "Error de ruta" }
         }
     }
@@ -111,14 +128,28 @@ class MainActivity : ComponentActivity() {
         destination = selectedDestination
         lifecycleScope.launch {
             apiClient.route(RoutePoint(location.latitude, location.longitude), selectedDestination)
-                .onSuccess { route = it; apiStatus = "Destino seleccionado" }
+                .onSuccess { route = it; voiceEngine.announceRoute(it.distanceMeters, it.durationSeconds); apiStatus = "Destino seleccionado" }
                 .onFailure { apiStatus = "Error de ruta" }
+        }
+    }
+
+    private fun saveCurrentPoint(location: com.locusgps.location.UserLocation?) {
+        if (location == null) { apiStatus = "Ubicación no disponible"; return }
+        lifecycleScope.launch {
+            apiClient.createMapPoint(RoutePoint(location.latitude, location.longitude), "Punto guardado")
+                .onSuccess { mapPoints = mapPoints + it; apiStatus = "Punto guardado" }
+                .onFailure { apiStatus = "No se pudo guardar el punto" }
         }
     }
 
     override fun onStop() {
         super.onStop()
         locationRepository.stop()
+    }
+
+    override fun onDestroy() {
+        voiceEngine.shutdown()
+        super.onDestroy()
     }
 
     override fun onStart() {

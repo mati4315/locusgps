@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS map_points (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  type VARCHAR(32) NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  latitude DECIMAL(9,6) NOT NULL,
+  longitude DECIMAL(9,6) NOT NULL,
+  description VARCHAR(500) NULL,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  alert_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  direction SMALLINT NULL,
+  source VARCHAR(20) NOT NULL DEFAULT 'user',
+  verified_at TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_map_points_user_location (user_id, latitude, longitude),
+  KEY idx_map_points_user_type (user_id, type),
+  CONSTRAINT fk_map_points_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

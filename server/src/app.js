@@ -9,6 +9,7 @@ import { locationRouter } from './routes/location.js';
 import { favoritesRouter } from './routes/favorites.js';
 import { routesRouter } from './routes/routes.js';
 import { searchRouter } from './routes/search.js';
+import { mapPointsRouter } from './routes/mapPoints.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -39,6 +40,7 @@ app.get('/', (req, res) => {
 });
 app.use(authenticateDevice);
 app.use(searchRouter);
+app.use(mapPointsRouter);
 app.use(locationRouter);
 app.use(favoritesRouter);
 app.use(routesRouter);

@@ -47,6 +47,8 @@ export async function calculateRoute({ origin, destination, mode = 'driving' }) 
       distanceMeters: instruction.distance,
       durationSeconds: Math.round((instruction.time ?? 0) / 1000),
       sign: instruction.sign,
+      intervalStart: instruction.interval?.[0] ?? 0,
+      intervalEnd: instruction.interval?.[1] ?? 0,
     })),
   };
 }
