@@ -12,6 +12,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.locusgps.location.UserLocation
+import com.locusgps.api.RouteResult
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.LineString
+import org.maplibre.geojson.Point
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.PropertyFactory.lineColor
+import org.maplibre.android.style.layers.PropertyFactory.lineWidth
+import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -21,7 +30,7 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.location.LocationComponentActivationOptions
 
 @Composable
-fun MapScreen(location: UserLocation?, hasMapTilerKey: Boolean, modifier: Modifier = Modifier) {
+fun MapScreen(location: UserLocation?, route: RouteResult?, hasMapTilerKey: Boolean, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val latestLocation = rememberUpdatedState(location)
     val isLocationPuckReady = remember { mutableStateOf(false) }
@@ -33,6 +42,7 @@ fun MapScreen(location: UserLocation?, hasMapTilerKey: Boolean, modifier: Modifi
             getMapAsync { map ->
                 MapStyleConfig.styleUrl()?.let { styleUrl ->
                     map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
+                        route?.let { style.addRoute(it) }
                         map.locationComponent.activateLocationComponent(
                             LocationComponentActivationOptions.builder(context, style)
                                 // The app owns GPS sampling; MapLibre only renders the location puck.
@@ -75,7 +85,24 @@ fun MapScreen(location: UserLocation?, hasMapTilerKey: Boolean, modifier: Modifi
         }
     }
 
+    LaunchedEffect(route) {
+        if (route != null) {
+            mapView.getMapAsync { map -> map.style?.addRoute(route) }
+        }
+    }
+
     AndroidView(factory = { mapView }, modifier = modifier)
+}
+
+private fun Style.addRoute(route: RouteResult) {
+    if (route.geometry.size < 2) return
+    val points = route.geometry.map { Point.fromLngLat(it.longitude, it.latitude) }
+    val sourceId = "locus-route-source"
+    val layerId = "locus-route-layer"
+    val feature = Feature.fromGeometry(LineString.fromLngLats(points))
+    getSource(sourceId)?.let { (it as GeoJsonSource).setGeoJson(FeatureCollection.fromFeature(feature)); return }
+    addSource(GeoJsonSource(sourceId, FeatureCollection.fromFeature(feature)))
+    addLayer(LineLayer(layerId, sourceId).withProperties(lineColor("#4FC3F7"), lineWidth(5f)))
 }
 
 private fun UserLocation.toAndroidLocation() = Location("locus-local").apply {

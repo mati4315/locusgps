@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.locusgps.location.UserLocation
+import com.locusgps.api.RouteResult
 import com.locusgps.map.MapScreen
 
 private val DarkColors = darkColorScheme(
@@ -34,18 +35,19 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun LocusGpsApp(location: UserLocation?, hasMapTilerKey: Boolean, apiStatus: String, onRequestLocation: () -> Unit) {
+fun LocusGpsApp(location: UserLocation?, route: RouteResult?, hasMapTilerKey: Boolean, apiStatus: String, onRequestLocation: () -> Unit, onRequestDemoRoute: () -> Unit) {
     MaterialTheme(colorScheme = DarkColors) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Column {
                 Box(modifier = Modifier.weight(1f)) {
-                    MapScreen(location = location, hasMapTilerKey = hasMapTilerKey)
+                    MapScreen(location = location, route = route, hasMapTilerKey = hasMapTilerKey)
                     SearchBarPlaceholder(modifier = Modifier.align(Alignment.TopCenter))
                     ApiStatus(modifier = Modifier.align(Alignment.TopCenter).padding(top = 78.dp), status = apiStatus)
                     LocationButton(
                         modifier = Modifier.align(Alignment.BottomEnd),
                         onRequestLocation = onRequestLocation,
                     )
+                    Button(onClick = onRequestDemoRoute, modifier = Modifier.align(Alignment.BottomStart).padding(20.dp)) { Text("Ruta demo") }
                     if (!hasMapTilerKey) MissingKeyMessage(modifier = Modifier.align(Alignment.Center))
                 }
                 BottomNavigation()

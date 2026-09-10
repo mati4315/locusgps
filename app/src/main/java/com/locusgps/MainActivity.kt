@@ -16,12 +16,15 @@ import androidx.core.content.ContextCompat
 import com.locusgps.location.LocationRepository
 import com.locusgps.ui.LocusGpsApp
 import com.locusgps.api.ApiClient
+import com.locusgps.api.RoutePoint
+import com.locusgps.api.RouteResult
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val locationRepository by lazy { LocationRepository(applicationContext) }
     private val apiClient by lazy { ApiClient() }
     private var apiStatus by mutableStateOf("Comprobando API…")
+    private var route by mutableStateOf<RouteResult?>(null)
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { permissions ->
@@ -36,9 +39,11 @@ class MainActivity : ComponentActivity() {
             val location by locationRepository.location.collectAsStateWithLifecycle()
             LocusGpsApp(
                 location = location,
+                route = route,
                 hasMapTilerKey = BuildConfig.MAPTILER_KEY.isNotBlank(),
                 apiStatus = apiStatus,
                 onRequestLocation = ::requestLocation,
+                onRequestDemoRoute = { requestDemoRoute(location) },
             )
         }
         lifecycleScope.launch {
@@ -46,6 +51,16 @@ class MainActivity : ComponentActivity() {
                 .fold({ "API conectada" }, { "API no disponible" })
         }
         requestLocation()
+    }
+
+    private fun requestDemoRoute(location: com.locusgps.location.UserLocation?) {
+        if (location == null) return
+        lifecycleScope.launch {
+            val destination = RoutePoint(location.latitude + 0.01, location.longitude + 0.01)
+            apiClient.route(RoutePoint(location.latitude, location.longitude), destination)
+                .onSuccess { route = it; apiStatus = "Ruta lista" }
+                .onFailure { apiStatus = "Error de ruta" }
+        }
     }
 
     override fun onStop() {
