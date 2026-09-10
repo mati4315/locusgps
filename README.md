@@ -1,39 +1,112 @@
 # Locus GPS
 
-MVP Android de un navegador GPS personal. La primera entrega implementa el mapa, permisos de ubicación y la posición local; no envía lecturas GPS a ningún servidor.
+Navegador GPS personal para Android, optimizado para privacidad, bajo consumo y navegación local.
 
-## Abrir y ejecutar
+La aplicación usa Android + MapLibre + MapTiler/OSM. Hostinger ejecuta una API Node.js/Express y MySQL. GraphHopper se consume únicamente desde el backend mediante `routingProvider`; la clave nunca se incluye en Android.
 
-1. Abre esta carpeta con Android Studio (JDK 17 y Android SDK 35).
-2. Copia `maptiler.properties.example` como `maptiler.properties` en la raíz y reemplaza el valor de `MAPTILER_KEY`. El archivo real está ignorado por Git.
+## Funcionalidad actual
+
+- Mapa MapLibre con estilo MapTiler.
+- Permisos y seguimiento GPS local.
+- Búsqueda de lugares mediante MapTiler Geocoding.
+- Rutas GraphHopper con geometría, distancia, ETA e instrucciones.
+- Dibujo de rutas y progreso local.
+- Detección de salida de ruta y recálculo con umbral.
+- Voz opcional para inicio y próximas maniobras.
+- Puntos personalizados, cámaras, peligros y favoritos.
+- Alertas locales de proximidad y filtros de capas.
+- Autenticación Bearer y persistencia MySQL.
+- No se envía GPS continuamente al servidor.
+
+## Estructura
+
+```text
+app/       Aplicación Android Kotlin/Compose/MapLibre
+server/    API Node.js/Express/MySQL
+guia/      Documentación de arquitectura del proyecto
+```
+
+## Android
+
+Requisitos: JDK 17 y Android SDK 35.
+
+1. Copia `maptiler.properties.example` a `maptiler.properties` y define `MAPTILER_KEY`.
+2. Copia `api.properties.example` a `api.properties` y define `API_TOKEN`.
 3. Sincroniza Gradle y ejecuta en un dispositivo Android con ubicación habilitada.
 
-También se puede compilar desde Windows sin Android Studio:
+Ambos archivos están ignorados por Git y nunca deben publicarse.
 
 ```powershell
 .\gradlew.bat :app:assembleDebug
 ```
 
-El APK resultante queda en `app/build/outputs/apk/debug/app-debug.apk`.
+El APK queda en `app/build/outputs/apk/debug/app-debug.apk`.
 
-La clave se inyecta únicamente en el `BuildConfig` de la app. Antes de una distribución pública, debe restringirse en el panel de MapTiler al identificador de paquete y certificado de firma.
+La API por defecto es `https://locusgps.pro`. Puede cambiarse con `-PAPI_BASE_URL=https://api.locusgps.pro`.
 
-## Estado de fases
+## Backend
 
-- [x] Fase 1: proyecto Android, MapLibre, MapTiler configurable, permisos y seguimiento local de la posición.
-- [x] Fase 2: backend Hostinger, autenticación Bearer, migraciones MySQL, ubicación actual y favoritos.
-- [~] Fase 3: `routingProvider` / GraphHopper (`POST /api/routes`; falta configurar la clave del proveedor).
-- [ ] Fase 4: navegación, maniobras, voz y recálculo.
-- [ ] Fase 5: `map_points`, favoritos y alertas locales.
-- [ ] Fase 6: búsqueda y lugares.
+```powershell
+cd server
+npm install
+Copy-Item .env.example .env
+npm run migrate
+npm run start
+```
+
+Variables necesarias en `.env` o en Hostinger:
+
+```text
+NODE_ENV=production
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=...
+DB_USER=...
+DB_PASSWORD=...
+DEVICE_TOKEN_HASH=sha256-del-token-privado
+GRAPHHOPPER_API_KEY=...
+GRAPHHOPPER_BASE_URL=https://graphhopper.com/api/1
+MAPTILER_API_KEY=...
+```
+
+No guardar contraseñas, tokens ni claves en GitHub. `DEVICE_TOKEN_HASH` es el SHA-256 del token Bearer que usa Android; el token original nunca se almacena en el servidor.
+
+## API principal
+
+Públicos: `GET /health` y `GET /`.
+
+Requieren `Authorization: Bearer <token>`:
+
+```text
+POST   /api/routes
+GET    /api/search?q=...
+GET    /api/location
+POST   /api/location
+GET    /api/favorites
+POST   /api/favorites
+DELETE /api/favorites/:id
+GET    /api/map-points?lat=&lon=&radius=&type=
+POST   /api/map-points
+PATCH  /api/map-points/:id
+DELETE /api/map-points/:id
+```
+
+Después de desplegar cambios de base de datos en Hostinger, ejecutar `npm run migrate` para aplicar las migraciones, incluida `002_map_points.sql`.
+
+## Principios de arquitectura
+
+- Android obtiene GPS, dibuja el mapa, sigue la ruta y calcula proximidad localmente.
+- El servidor coordina autenticación, búsqueda, routing y sincronización puntual.
+- MySQL almacena solo lo necesario: usuarios, dispositivos, configuración, ubicación actual, favoritos y puntos personalizados.
+- No se guarda historial GPS ni se envía una lectura por segundo.
+- La IA es opcional y no controla navegación, GPS ni alertas críticas.
+
+## Estado de desarrollo
+
+- [x] Fase 1: mapa, MapTiler/OSM, permisos y posición local.
+- [x] Fase 2: Hostinger, Node.js, MySQL y autenticación.
+- [x] Fase 3: `routingProvider` con GraphHopper.
+- [x] Fase 4: navegación, ETA, voz y recálculo.
+- [x] Fase 5: puntos personalizados, capas y alertas locales.
+- [x] Fase 6: búsqueda y selección de destinos.
 - [ ] Fase 7: IA opcional.
-
-## Arquitectura local actual
-
-`MainActivity` contiene la UI. `LocationRepository` obtiene ubicación con `LocationManager`, y `MapScreen` adapta `MapView` de MapLibre a Compose. La cámara se actualiza localmente y la clave de tiles está centralizada en `MapStyleConfig`.
-
-## Backend local
-
-La base del backend está en `server/`. Copia `server/.env.example` a `server/.env`, instala dependencias con `npm install` y ejecuta `npm run start`. Antes de usar datos persistentes, crea la base de datos MySQL indicada en `.env` y ejecuta `npm run migrate`. `GET /health` y `GET /` son públicos; ubicación y favoritos requieren `Authorization: Bearer <token>`. En Hostinger se deben configurar las variables de base de datos y `DEVICE_TOKEN_HASH` (SHA-256 del token privado, nunca el token en el repositorio). En la primera petición autenticada se crea automáticamente el usuario personal y el dispositivo.
-
-La app Android usa `https://locusgps.pro` como API por defecto y muestra el estado de `/health` en la pantalla principal. Se puede cambiar en compilación con `-PAPI_BASE_URL=https://api.locusgps.pro` cuando el subdominio esté conectado.
