@@ -43,6 +43,7 @@ fun LocusGpsApp(location: UserLocation?, route: RouteResult?, hasMapTilerKey: Bo
                     MapScreen(location = location, route = route, hasMapTilerKey = hasMapTilerKey)
                     SearchBarPlaceholder(modifier = Modifier.align(Alignment.TopCenter))
                     ApiStatus(modifier = Modifier.align(Alignment.TopCenter).padding(top = 78.dp), status = apiStatus)
+                    route?.let { NavigationSummary(modifier = Modifier.align(Alignment.TopStart).padding(top = 128.dp), distanceMeters = it.distanceMeters, durationSeconds = it.durationSeconds) }
                     LocationButton(
                         modifier = Modifier.align(Alignment.BottomEnd),
                         onRequestLocation = onRequestLocation,
@@ -63,6 +64,32 @@ private fun ApiStatus(modifier: Modifier, status: String) = Surface(
     shape = RoundedCornerShape(12.dp),
 ) {
     Text(status, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = Color(0xFFBBC7D3))
+}
+
+@Composable
+private fun NavigationSummary(modifier: Modifier, distanceMeters: Double, durationSeconds: Int) = Surface(
+    modifier = modifier.padding(horizontal = 16.dp),
+    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+    shape = RoundedCornerShape(14.dp),
+) {
+    Row(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        Text(formatDistance(distanceMeters), color = Color.White)
+        Text(formatDuration(durationSeconds), color = Color(0xFFBBC7D3))
+    }
+}
+
+private fun formatDistance(meters: Double): String = if (meters >= 1000) {
+    "%.1f km".format(meters / 1000)
+} else {
+    "%.0f m".format(meters)
+}
+
+private fun formatDuration(seconds: Int): String {
+    val minutes = (seconds / 60).coerceAtLeast(1)
+    return if (minutes >= 60) "${minutes / 60} h ${minutes % 60} min" else "$minutes min"
 }
 
 @Composable
