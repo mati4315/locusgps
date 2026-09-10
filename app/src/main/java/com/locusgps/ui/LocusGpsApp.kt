@@ -33,8 +33,10 @@ import com.locusgps.location.UserLocation
 import com.locusgps.api.RouteResult
 import com.locusgps.api.SearchPlace
 import com.locusgps.api.MapPoint
+import com.locusgps.api.RoutePoint
 import com.locusgps.map.MapScreen
 import com.locusgps.navigation.NavigationEngine
+import kotlinx.coroutines.delay
 
 private val DarkColors = darkColorScheme(
     primary = Color(0xFF67D4FF),
@@ -43,33 +45,37 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun LocusGpsApp(location: UserLocation?, route: RouteResult?, mapPoints: List<MapPoint>, pointAlert: String?, searchResults: List<SearchPlace>, searching: Boolean, voiceEnabled: Boolean, hasMapTilerKey: Boolean, apiStatus: String, onRequestLocation: () -> Unit, onRequestDemoRoute: () -> Unit, onSearch: (String) -> Unit, onSelectPlace: (SearchPlace) -> Unit, onToggleVoice: () -> Unit, onSaveCurrentPoint: () -> Unit, onFinishNavigation: () -> Unit) {
+fun LocusGpsApp(location: UserLocation?, route: RouteResult?, mapPoints: List<MapPoint>, pointAlert: String?, searchResults: List<SearchPlace>, searching: Boolean, voiceEnabled: Boolean, simulationRunning: Boolean, simulationSpeed: Float, hasMapTilerKey: Boolean, apiStatus: String, onRequestLocation: () -> Unit, recenterRequest: Int, onCenterLocation: () -> Unit, contextPoint: RoutePoint?, onLongPressMap: (RoutePoint) -> Unit, onDismissContext: () -> Unit, onGoToContext: (RoutePoint) -> Unit, onSaveContext: (RoutePoint) -> Unit, onRequestDemoRoute: () -> Unit, onSearch: (String) -> Unit, onSelectPlace: (SearchPlace) -> Unit, onToggleVoice: () -> Unit, onSaveCurrentPoint: () -> Unit, onFinishNavigation: () -> Unit, onOpenSimulation: () -> Unit, onSetSimulationSpeed: (Float) -> Unit, onStartSimulation: () -> Unit, onPauseSimulation: () -> Unit, onStopSimulation: () -> Unit, onSimulateDetour: () -> Unit, onRandomDestination: () -> Unit) {
     var showLayers by remember { mutableStateOf(false) }
+    var showSimulation by remember { mutableStateOf(false) }
     var enabledTypes by remember { mutableStateOf(setOf("favorite", "camera", "speed_camera", "traffic_light_camera", "danger", "school_zone", "fuel", "parking", "rest_area", "custom")) }
     val visiblePoints = mapPoints.filter { it.type in enabledTypes }
     MaterialTheme(colorScheme = DarkColors) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Column {
                 Box(modifier = Modifier.weight(1f)) {
-                    MapScreen(location = location, route = route, mapPoints = visiblePoints, hasMapTilerKey = hasMapTilerKey)
+                    MapScreen(location = location, route = route, mapPoints = visiblePoints, recenterRequest = recenterRequest, hasMapTilerKey = hasMapTilerKey, onLongPress = onLongPressMap)
                     SearchBar(modifier = Modifier.align(Alignment.TopCenter), results = searchResults, searching = searching, onSearch = onSearch, onSelectPlace = onSelectPlace)
                     ApiStatus(modifier = Modifier.align(Alignment.TopCenter).padding(top = 78.dp), status = apiStatus)
                     Button(onClick = { showLayers = !showLayers }, modifier = Modifier.align(Alignment.TopEnd).padding(top = 80.dp, end = 16.dp)) { Text("Capas") }
+                    Button(onClick = { showSimulation = !showSimulation }, modifier = Modifier.align(Alignment.TopEnd).padding(top = 80.dp, end = 94.dp)) { Text("Prueba") }
                     if (showLayers) {
                         LayerPanel(modifier = Modifier.align(Alignment.TopEnd).padding(top = 132.dp, end = 16.dp), enabledTypes = enabledTypes, onToggle = { type -> enabledTypes = if (type in enabledTypes) enabledTypes - type else enabledTypes + type })
                     }
+                    if (showSimulation) SimulationPanel(modifier = Modifier.align(Alignment.TopEnd).padding(top = 132.dp, end = 94.dp), routeAvailable = route != null, running = simulationRunning, speed = simulationSpeed, onSpeed = onSetSimulationSpeed, onStart = onStartSimulation, onPause = onPauseSimulation, onStop = onStopSimulation, onDetour = onSimulateDetour, onRandomDestination = onRandomDestination)
                     route?.let { NavigationSummary(modifier = Modifier.align(Alignment.TopStart).padding(top = 128.dp), distanceMeters = it.distanceMeters, durationSeconds = it.durationSeconds, nextInstruction = it.instructions.firstOrNull()?.text) }
                     route?.let { NavigationEngine.update(it, location)?.let { state -> NavigationStateBanner(modifier = Modifier.align(Alignment.TopStart).padding(top = 182.dp), state.offRoute) } }
                     pointAlert?.let { PointAlertBanner(modifier = Modifier.align(Alignment.TopCenter).padding(top = 232.dp), text = it) }
                     route?.let { Button(onClick = onFinishNavigation, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 84.dp)) { Text("Finalizar") } }
                     LocationButton(
                         modifier = Modifier.align(Alignment.BottomEnd),
-                        onRequestLocation = onRequestLocation,
+                        onRequestLocation = onCenterLocation,
                     )
                     Button(onClick = onRequestDemoRoute, modifier = Modifier.align(Alignment.BottomStart).padding(20.dp)) { Text("Ruta demo") }
                     Button(onClick = onToggleVoice, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 92.dp, bottom = 28.dp)) { Text(if (voiceEnabled) "Voz: ON" else "Voz: OFF") }
                     Button(onClick = onSaveCurrentPoint, modifier = Modifier.align(Alignment.BottomStart).padding(start = 20.dp, bottom = 84.dp)) { Text("Guardar punto") }
                     if (!hasMapTilerKey) MissingKeyMessage(modifier = Modifier.align(Alignment.Center))
+                    contextPoint?.let { ContextPointPanel(modifier = Modifier.align(Alignment.Center), onGoTo = { onGoToContext(it) }, onSave = { onSaveContext(it) }, onDismiss = onDismissContext) }
                 }
                 BottomNavigation()
             }
@@ -83,6 +89,30 @@ private fun LayerPanel(modifier: Modifier, enabledTypes: Set<String>, onToggle: 
         listOf("camera" to "Cámaras", "danger" to "Peligros", "favorite" to "Favoritos", "fuel" to "Gasolineras", "parking" to "Parkings", "custom" to "Personalizados").forEach { (type, label) ->
             Button(onClick = { onToggle(type) }, modifier = Modifier.fillMaxWidth()) { Text(if (type in enabledTypes) "✓ $label" else "  $label") }
         }
+    }
+}
+
+@Composable
+private fun SimulationPanel(modifier: Modifier, routeAvailable: Boolean, running: Boolean, speed: Float, onSpeed: (Float) -> Unit, onStart: () -> Unit, onPause: () -> Unit, onStop: () -> Unit, onDetour: () -> Unit, onRandomDestination: () -> Unit) = Surface(
+    modifier = modifier,
+    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+    shape = RoundedCornerShape(14.dp),
+) {
+    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text("Simulación local", color = Color.White)
+        Text(if (routeAvailable) "Velocidad: ${speed.toInt()} km/h" else "Calcula una ruta primero", color = Color(0xFFBBC7D3))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf(20f, 40f, 80f, 110f, 130f).forEach { value ->
+                Button(onClick = { onSpeed(value) }, enabled = routeAvailable) { Text("${value.toInt()}") }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Button(onClick = onStart, enabled = routeAvailable && !running) { Text("Iniciar") }
+            Button(onClick = onPause, enabled = running) { Text("Pausa") }
+            Button(onClick = onStop, enabled = running) { Text("Detener") }
+        }
+        Button(onClick = onDetour, enabled = running && routeAvailable, modifier = Modifier.fillMaxWidth()) { Text("Tomar desvío") }
+        Button(onClick = onRandomDestination, enabled = routeAvailable, modifier = Modifier.fillMaxWidth()) { Text("Destino aleatorio ≤25 km") }
     }
 }
 
@@ -143,6 +173,12 @@ private fun formatDuration(seconds: Int): String {
 @Composable
 private fun SearchBar(modifier: Modifier, results: List<SearchPlace>, searching: Boolean, onSearch: (String) -> Unit, onSelectPlace: (SearchPlace) -> Unit) {
     var query by remember { mutableStateOf("") }
+    androidx.compose.runtime.LaunchedEffect(query) {
+        if (query.trim().length >= 2) {
+            delay(350)
+            onSearch(query)
+        }
+    }
     Column(modifier = modifier.fillMaxWidth().padding(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.material3.OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.weight(1f), singleLine = true, placeholder = { Text("Buscar lugar o dirección") })
@@ -157,6 +193,16 @@ private fun SearchBar(modifier: Modifier, results: List<SearchPlace>, searching:
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ContextPointPanel(modifier: Modifier, onGoTo: () -> Unit, onSave: () -> Unit, onDismiss: () -> Unit) = Surface(modifier = modifier.padding(24.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f), shape = RoundedCornerShape(18.dp), shadowElevation = 12.dp) {
+    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Punto seleccionado", color = Color.White)
+        Button(onClick = onGoTo, modifier = Modifier.fillMaxWidth()) { Text("Ir aquí") }
+        Button(onClick = onSave, modifier = Modifier.fillMaxWidth()) { Text("Guardar punto") }
+        Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Cancelar") }
     }
 }
 

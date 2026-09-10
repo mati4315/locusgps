@@ -23,6 +23,14 @@ import com.locusgps.api.MapPoint
 import com.locusgps.navigation.NavigationEngine
 import com.locusgps.navigation.VoiceInstructionEngine
 import com.locusgps.navigation.PointAlertEngine
+import com.locusgps.navigation.RouteSimulator
+import com.locusgps.navigation.SimulationCursor
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlin.math.cos
+import kotlin.math.PI
+import kotlin.random.Random
 import com.locusgps.settings.SettingsRepository
 import kotlinx.coroutines.launch
 
@@ -42,6 +50,14 @@ class MainActivity : ComponentActivity() {
     private var lastRecalculationAt = 0L
     private var recalculating = false
     private var pointAlert by mutableStateOf<String?>(null)
+    private var simulationPoint by mutableStateOf<RoutePoint?>(null)
+    private var simulationRunning by mutableStateOf(false)
+    private var simulationSpeed by mutableStateOf(40f)
+    private var simulationCursor = SimulationCursor()
+    private var simulationDetourTicks = 0
+    private var recenterRequest by mutableStateOf(0)
+    private var contextPoint by mutableStateOf<RoutePoint?>(null)
+    private var simulationJob: Job? = null
     private var voiceEnabled by mutableStateOf(false)
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -57,8 +73,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val location by locationRepository.location.collectAsStateWithLifecycle()
+            val displayLocation = simulationPoint?.let { point -> com.locusgps.location.UserLocation(point.latitude, point.longitude, null, 5f) } ?: location
             LocusGpsApp(
-                location = location,
+                location = displayLocation,
                 route = route,
                 searchResults = searchResults,
                 searching = searching,
@@ -68,12 +85,28 @@ class MainActivity : ComponentActivity() {
                 hasMapTilerKey = BuildConfig.MAPTILER_KEY.isNotBlank(),
                 apiStatus = apiStatus,
                 onRequestLocation = ::requestLocation,
+                recenterRequest = recenterRequest,
+                onCenterLocation = { recenterRequest++ ; requestLocation() },
+                contextPoint = contextPoint,
+                onLongPressMap = { contextPoint = it },
+                onDismissContext = { contextPoint = null },
+                onGoToContext = { point -> contextPoint = null; routeToPoint(point, displayLocation) },
+                onSaveContext = { point -> contextPoint = null; saveMapPoint(point) },
                 onRequestDemoRoute = { requestDemoRoute(location) },
                 onSearch = { query -> search(query, location) },
                 onSelectPlace = { place -> selectPlace(place, location) },
                 onToggleVoice = { voiceEnabled = !voiceEnabled; settingsRepository.voiceEnabled = voiceEnabled; voiceEngine.enabled = voiceEnabled },
                 onSaveCurrentPoint = { saveCurrentPoint(location) },
                 onFinishNavigation = ::finishNavigation,
+                simulationRunning = simulationRunning,
+                simulationSpeed = simulationSpeed,
+                onOpenSimulation = { },
+                onSetSimulationSpeed = { simulationSpeed = it },
+                onStartSimulation = ::startSimulation,
+                onPauseSimulation = ::pauseSimulation,
+                onStopSimulation = ::stopSimulation,
+                onSimulateDetour = ::simulateDetour,
+                onRandomDestination = { randomDestination(displayLocation) },
             )
         }
         lifecycleScope.launch {
@@ -154,12 +187,84 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun saveMapPoint(point: RoutePoint) {
+        lifecycleScope.launch {
+            apiClient.createMapPoint(point, "Punto guardado")
+                .onSuccess { mapPoints = mapPoints + it; apiStatus = "Punto guardado" }
+                .onFailure { apiStatus = "No se pudo guardar el punto" }
+        }
+    }
+
+    private fun routeToPoint(point: RoutePoint, location: com.locusgps.location.UserLocation?) {
+        if (location == null) { apiStatus = "Ubicación no disponible"; return }
+        destination = point
+        stopSimulation()
+        lifecycleScope.launch {
+            apiClient.route(RoutePoint(location.latitude, location.longitude), point)
+                .onSuccess { route = it; apiStatus = "Destino seleccionado" }
+                .onFailure { apiStatus = "No se pudo calcular la ruta" }
+        }
+    }
+
     private fun finishNavigation() {
         route = null
         destination = null
         pointAlert = null
         lastRecalculationAt = 0L
         apiStatus = "Navegación finalizada"
+        stopSimulation()
+    }
+
+    private fun startSimulation() {
+        val activeRoute = route ?: return
+        if (simulationPoint == null) simulationPoint = activeRoute.geometry.firstOrNull()?.let { RoutePoint(it.latitude, it.longitude) }
+        simulationRunning = true
+        simulationJob?.cancel()
+        simulationJob = lifecycleScope.launch {
+            while (isActive && simulationRunning) {
+                delay(1000)
+                if (simulationDetourTicks > 0) {
+                    simulationDetourTicks--
+                } else {
+                    val next = RouteSimulator.advance(activeRoute, simulationCursor, simulationSpeed, 1.0)
+                    simulationCursor = next.first
+                    simulationPoint = next.second
+                }
+            }
+        }
+    }
+
+    private fun pauseSimulation() { simulationRunning = false; simulationJob?.cancel() }
+
+    private fun stopSimulation() {
+        simulationRunning = false
+        simulationJob?.cancel()
+        simulationJob = null
+        simulationPoint = null
+        simulationCursor = SimulationCursor()
+        simulationDetourTicks = 0
+    }
+
+    private fun simulateDetour() {
+        val point = simulationPoint ?: return
+        simulationPoint = RoutePoint(point.latitude + 0.0025, point.longitude + 0.0025)
+        simulationDetourTicks = 10
+    }
+
+    private fun randomDestination(location: com.locusgps.location.UserLocation?) {
+        if (location == null) return
+        val distanceMeters = Random.nextDouble(1_000.0, 25_000.0)
+        val bearing = Random.nextDouble(0.0, 2 * PI)
+        val latitudeDelta = (distanceMeters * kotlin.math.cos(bearing)) / 111_320.0
+        val longitudeDelta = (distanceMeters * kotlin.math.sin(bearing)) / (111_320.0 * cos(Math.toRadians(location.latitude)).coerceAtLeast(0.1))
+        val selectedDestination = RoutePoint(location.latitude + latitudeDelta, location.longitude + longitudeDelta)
+        destination = selectedDestination
+        stopSimulation()
+        lifecycleScope.launch {
+            apiClient.route(RoutePoint(location.latitude, location.longitude), selectedDestination)
+                .onSuccess { route = it; apiStatus = "Destino aleatorio listo" }
+                .onFailure { apiStatus = "No se encontró ruta aleatoria" }
+        }
     }
 
     override fun onStop() {

@@ -14,6 +14,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.locusgps.location.UserLocation
 import com.locusgps.api.RouteResult
 import com.locusgps.api.MapPoint
+import com.locusgps.api.RoutePoint
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
@@ -34,7 +35,7 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.location.LocationComponentActivationOptions
 
 @Composable
-fun MapScreen(location: UserLocation?, route: RouteResult?, mapPoints: List<MapPoint>, hasMapTilerKey: Boolean, modifier: Modifier = Modifier) {
+fun MapScreen(location: UserLocation?, route: RouteResult?, mapPoints: List<MapPoint>, recenterRequest: Int, hasMapTilerKey: Boolean, onLongPress: (RoutePoint) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val latestLocation = rememberUpdatedState(location)
     val isLocationPuckReady = remember { mutableStateOf(false) }
@@ -44,6 +45,10 @@ fun MapScreen(location: UserLocation?, route: RouteResult?, mapPoints: List<MapP
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             onCreate(null)
             getMapAsync { map ->
+                map.addOnMapLongClickListener { point ->
+                    onLongPress(RoutePoint(point.latitude, point.longitude))
+                    true
+                }
                 MapStyleConfig.styleUrl()?.let { styleUrl ->
                     map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
                         route?.let { style.addRoute(it) }
@@ -71,7 +76,7 @@ fun MapScreen(location: UserLocation?, route: RouteResult?, mapPoints: List<MapP
         }
     }
 
-    LaunchedEffect(location, hasMapTilerKey, isLocationPuckReady.value) {
+    LaunchedEffect(location, recenterRequest, hasMapTilerKey, isLocationPuckReady.value) {
         if (hasMapTilerKey && location != null) {
             mapView.getMapAsync { map ->
                 if (isLocationPuckReady.value) {
