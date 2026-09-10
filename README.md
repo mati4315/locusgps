@@ -22,7 +22,7 @@ La clave se inyecta únicamente en el `BuildConfig` de la app. Antes de una dist
 
 - [x] Fase 1: proyecto Android, MapLibre, MapTiler configurable, permisos y seguimiento local de la posición.
 - [x] Fase 2: backend Hostinger, autenticación Bearer, migraciones MySQL, ubicación actual y favoritos.
-- [ ] Fase 3: rutas mediante `routingProvider` / GraphHopper.
+- [~] Fase 3: `routingProvider` / GraphHopper (`POST /api/routes`; falta configurar la clave del proveedor).
 - [ ] Fase 4: navegación, maniobras, voz y recálculo.
 - [ ] Fase 5: `map_points`, favoritos y alertas locales.
 - [ ] Fase 6: búsqueda y lugares.
