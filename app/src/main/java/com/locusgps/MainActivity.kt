@@ -18,6 +18,7 @@ import com.locusgps.ui.LocusGpsApp
 import com.locusgps.api.ApiClient
 import com.locusgps.api.RoutePoint
 import com.locusgps.api.RouteResult
+import com.locusgps.api.SearchPlace
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -25,6 +26,8 @@ class MainActivity : ComponentActivity() {
     private val apiClient by lazy { ApiClient() }
     private var apiStatus by mutableStateOf("Comprobando API…")
     private var route by mutableStateOf<RouteResult?>(null)
+    private var searchResults by mutableStateOf<List<SearchPlace>>(emptyList())
+    private var searching by mutableStateOf(false)
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { permissions ->
@@ -40,10 +43,14 @@ class MainActivity : ComponentActivity() {
             LocusGpsApp(
                 location = location,
                 route = route,
+                searchResults = searchResults,
+                searching = searching,
                 hasMapTilerKey = BuildConfig.MAPTILER_KEY.isNotBlank(),
                 apiStatus = apiStatus,
                 onRequestLocation = ::requestLocation,
                 onRequestDemoRoute = { requestDemoRoute(location) },
+                onSearch = { query -> search(query, location) },
+                onSelectPlace = { place -> selectPlace(place, location) },
             )
         }
         lifecycleScope.launch {
@@ -59,6 +66,27 @@ class MainActivity : ComponentActivity() {
             val destination = RoutePoint(location.latitude + 0.01, location.longitude + 0.01)
             apiClient.route(RoutePoint(location.latitude, location.longitude), destination)
                 .onSuccess { route = it; apiStatus = "Ruta lista" }
+                .onFailure { apiStatus = "Error de ruta" }
+        }
+    }
+
+    private fun search(query: String, location: com.locusgps.location.UserLocation?) {
+        if (query.trim().length < 2) return
+        lifecycleScope.launch {
+            searching = true
+            apiClient.search(query, location?.let { RoutePoint(it.latitude, it.longitude) })
+                .onSuccess { searchResults = it }
+                .onFailure { searchResults = emptyList(); apiStatus = "Error de búsqueda" }
+            searching = false
+        }
+    }
+
+    private fun selectPlace(place: SearchPlace, location: com.locusgps.location.UserLocation?) {
+        searchResults = emptyList()
+        if (location == null) return
+        lifecycleScope.launch {
+            apiClient.route(RoutePoint(location.latitude, location.longitude), RoutePoint(place.latitude, place.longitude))
+                .onSuccess { route = it; apiStatus = "Destino seleccionado" }
                 .onFailure { apiStatus = "Error de ruta" }
         }
     }

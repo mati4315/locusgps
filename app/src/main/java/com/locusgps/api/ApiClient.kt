@@ -13,6 +13,7 @@ data class RouteResult(
     val durationSeconds: Int,
     val geometry: List<RoutePoint>,
 )
+data class SearchPlace(val id: String, val name: String, val address: String, val latitude: Double, val longitude: Double)
 
 /** Lightweight API boundary. GPS remains local unless a future use explicitly calls an endpoint. */
 class ApiClient(
@@ -40,6 +41,30 @@ class ApiClient(
     }
 
     suspend fun favorites(): Result<String> = authenticatedGet("/api/favorites")
+
+    suspend fun search(query: String, location: RoutePoint? = null): Result<List<SearchPlace>> = withContext(Dispatchers.IO) {
+        runCatching {
+            require(token.isNotBlank()) { "API_TOKEN no configurado" }
+            val encoded = java.net.URLEncoder.encode(query.trim(), Charsets.UTF_8.name())
+            val suffix = if (location != null) "&lat=${location.latitude}&lon=${location.longitude}" else ""
+            val connection = (URL("$baseUrl/api/search?q=$encoded$suffix").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 8_000
+                readTimeout = 10_000
+                setRequestProperty("Authorization", "Bearer $token")
+            }
+            try {
+                val body = (if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream)
+                    .bufferedReader().use { it.readText() }
+                if (connection.responseCode !in 200..299) error("HTTP ${connection.responseCode}: $body")
+                val results = JSONObject(body).getJSONArray("results")
+                List(results.length()) { index ->
+                    val item = results.getJSONObject(index)
+                    SearchPlace(item.getString("id"), item.getString("name"), item.getString("address"), item.getDouble("latitude"), item.getDouble("longitude"))
+                }
+            } finally { connection.disconnect() }
+        }
+    }
 
     suspend fun route(origin: RoutePoint, destination: RoutePoint, mode: String = "driving"): Result<RouteResult> = withContext(Dispatchers.IO) {
         runCatching {

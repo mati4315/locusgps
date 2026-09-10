@@ -1,6 +1,7 @@
 package com.locusgps.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,12 +21,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.locusgps.location.UserLocation
 import com.locusgps.api.RouteResult
+import com.locusgps.api.SearchPlace
 import com.locusgps.map.MapScreen
 
 private val DarkColors = darkColorScheme(
@@ -35,13 +41,13 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun LocusGpsApp(location: UserLocation?, route: RouteResult?, hasMapTilerKey: Boolean, apiStatus: String, onRequestLocation: () -> Unit, onRequestDemoRoute: () -> Unit) {
+fun LocusGpsApp(location: UserLocation?, route: RouteResult?, searchResults: List<SearchPlace>, searching: Boolean, hasMapTilerKey: Boolean, apiStatus: String, onRequestLocation: () -> Unit, onRequestDemoRoute: () -> Unit, onSearch: (String) -> Unit, onSelectPlace: (SearchPlace) -> Unit) {
     MaterialTheme(colorScheme = DarkColors) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Column {
                 Box(modifier = Modifier.weight(1f)) {
                     MapScreen(location = location, route = route, hasMapTilerKey = hasMapTilerKey)
-                    SearchBarPlaceholder(modifier = Modifier.align(Alignment.TopCenter))
+                    SearchBar(modifier = Modifier.align(Alignment.TopCenter), results = searchResults, searching = searching, onSearch = onSearch, onSelectPlace = onSelectPlace)
                     ApiStatus(modifier = Modifier.align(Alignment.TopCenter).padding(top = 78.dp), status = apiStatus)
                     route?.let { NavigationSummary(modifier = Modifier.align(Alignment.TopStart).padding(top = 128.dp), distanceMeters = it.distanceMeters, durationSeconds = it.durationSeconds) }
                     LocationButton(
@@ -93,13 +99,23 @@ private fun formatDuration(seconds: Int): String {
 }
 
 @Composable
-private fun SearchBarPlaceholder(modifier: Modifier = Modifier) = Surface(
-    modifier = modifier.fillMaxWidth().padding(16.dp),
-    color = MaterialTheme.colorScheme.surface,
-    shape = RoundedCornerShape(18.dp),
-    shadowElevation = 8.dp,
-) {
-    Text("Buscar lugar o dirección", modifier = Modifier.padding(18.dp), color = Color(0xFFE7EDF4))
+private fun SearchBar(modifier: Modifier, results: List<SearchPlace>, searching: Boolean, onSearch: (String) -> Unit, onSelectPlace: (SearchPlace) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    Column(modifier = modifier.fillMaxWidth().padding(16.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.weight(1f), singleLine = true, placeholder = { Text("Buscar lugar o dirección") })
+            Button(onClick = { onSearch(query) }, enabled = !searching && query.trim().length >= 2) { Text(if (searching) "…" else "Buscar") }
+        }
+        if (results.isNotEmpty()) {
+            Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(14.dp), shadowElevation = 8.dp) {
+                Column {
+                    results.forEach { place ->
+                        Text(place.address, modifier = Modifier.fillMaxWidth().padding(14.dp).clickable { onSelectPlace(place) }, color = Color.White)
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
