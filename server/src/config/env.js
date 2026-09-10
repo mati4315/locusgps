@@ -18,6 +18,10 @@ export const env = {
     connectionLimit: Number(process.env.DB_CONNECTION_LIMIT ?? 3),
   },
   deviceTokenHash: process.env.DEVICE_TOKEN_HASH ?? '',
+  graphhopper: {
+    apiKey: process.env.GRAPHHOPPER_API_KEY ?? '',
+    baseUrl: (process.env.GRAPHHOPPER_BASE_URL ?? 'https://graphhopper.com/api/1').replace(/\/$/, ''),
+  },
   corsOrigins: (process.env.CORS_ORIGINS ?? '')
     .split(',')
     .map((origin) => origin.trim())

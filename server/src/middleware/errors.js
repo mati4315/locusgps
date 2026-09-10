@@ -4,5 +4,6 @@ export function notFound(req, res) {
 
 export function errorHandler(error, req, res, next) { // eslint-disable-line no-unused-vars
   console.error(`${req.method} ${req.path}`, error.message);
-  res.status(500).json({ error: 'internal_error' });
+  const status = Number.isInteger(error.statusCode) ? error.statusCode : 500;
+  res.status(status).json({ error: status >= 500 ? 'internal_error' : error.message });
 }
