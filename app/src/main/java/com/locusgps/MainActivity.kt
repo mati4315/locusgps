@@ -22,12 +22,16 @@ import com.locusgps.api.SearchPlace
 import com.locusgps.api.MapPoint
 import com.locusgps.navigation.NavigationEngine
 import com.locusgps.navigation.VoiceInstructionEngine
+import com.locusgps.navigation.PointAlertEngine
+import com.locusgps.settings.SettingsRepository
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val locationRepository by lazy { LocationRepository(applicationContext) }
     private val apiClient by lazy { ApiClient() }
     private val voiceEngine by lazy { VoiceInstructionEngine(applicationContext) }
+    private val pointAlertEngine = PointAlertEngine()
+    private val settingsRepository by lazy { SettingsRepository(applicationContext) }
     private var apiStatus by mutableStateOf("Comprobando API…")
     private var route by mutableStateOf<RouteResult?>(null)
     private var searchResults by mutableStateOf<List<SearchPlace>>(emptyList())
@@ -37,6 +41,7 @@ class MainActivity : ComponentActivity() {
     private var destination by mutableStateOf<RoutePoint?>(null)
     private var lastRecalculationAt = 0L
     private var recalculating = false
+    private var pointAlert by mutableStateOf<String?>(null)
     private var voiceEnabled by mutableStateOf(false)
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -47,6 +52,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        voiceEnabled = settingsRepository.voiceEnabled
+        voiceEngine.enabled = voiceEnabled
 
         setContent {
             val location by locationRepository.location.collectAsStateWithLifecycle()
@@ -56,6 +63,7 @@ class MainActivity : ComponentActivity() {
                 searchResults = searchResults,
                 searching = searching,
                 mapPoints = mapPoints,
+                pointAlert = pointAlert,
                 voiceEnabled = voiceEnabled,
                 hasMapTilerKey = BuildConfig.MAPTILER_KEY.isNotBlank(),
                 apiStatus = apiStatus,
@@ -63,8 +71,9 @@ class MainActivity : ComponentActivity() {
                 onRequestDemoRoute = { requestDemoRoute(location) },
                 onSearch = { query -> search(query, location) },
                 onSelectPlace = { place -> selectPlace(place, location) },
-                onToggleVoice = { voiceEnabled = !voiceEnabled; voiceEngine.enabled = voiceEnabled },
+                onToggleVoice = { voiceEnabled = !voiceEnabled; settingsRepository.voiceEnabled = voiceEnabled; voiceEngine.enabled = voiceEnabled },
                 onSaveCurrentPoint = { saveCurrentPoint(location) },
+                onFinishNavigation = ::finishNavigation,
             )
         }
         lifecycleScope.launch {
@@ -79,6 +88,9 @@ class MainActivity : ComponentActivity() {
                     lastPointsFetchAt = now
                     apiClient.mapPoints(RoutePoint(currentLocation.latitude, currentLocation.longitude))
                         .onSuccess { mapPoints = it }
+                }
+                pointAlertEngine.update(mapPoints, RoutePoint(currentLocation.latitude, currentLocation.longitude))?.let { alert ->
+                    pointAlert = "${alert.title} · ${alert.distanceMeters.toInt()} m"
                 }
                 val activeRoute = route
                 val activeDestination = destination
@@ -140,6 +152,14 @@ class MainActivity : ComponentActivity() {
                 .onSuccess { mapPoints = mapPoints + it; apiStatus = "Punto guardado" }
                 .onFailure { apiStatus = "No se pudo guardar el punto" }
         }
+    }
+
+    private fun finishNavigation() {
+        route = null
+        destination = null
+        pointAlert = null
+        lastRecalculationAt = 0L
+        apiStatus = "Navegación finalizada"
     }
 
     override fun onStop() {

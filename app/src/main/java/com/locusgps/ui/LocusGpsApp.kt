@@ -43,16 +43,25 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun LocusGpsApp(location: UserLocation?, route: RouteResult?, mapPoints: List<MapPoint>, searchResults: List<SearchPlace>, searching: Boolean, voiceEnabled: Boolean, hasMapTilerKey: Boolean, apiStatus: String, onRequestLocation: () -> Unit, onRequestDemoRoute: () -> Unit, onSearch: (String) -> Unit, onSelectPlace: (SearchPlace) -> Unit, onToggleVoice: () -> Unit, onSaveCurrentPoint: () -> Unit) {
+fun LocusGpsApp(location: UserLocation?, route: RouteResult?, mapPoints: List<MapPoint>, pointAlert: String?, searchResults: List<SearchPlace>, searching: Boolean, voiceEnabled: Boolean, hasMapTilerKey: Boolean, apiStatus: String, onRequestLocation: () -> Unit, onRequestDemoRoute: () -> Unit, onSearch: (String) -> Unit, onSelectPlace: (SearchPlace) -> Unit, onToggleVoice: () -> Unit, onSaveCurrentPoint: () -> Unit, onFinishNavigation: () -> Unit) {
+    var showLayers by remember { mutableStateOf(false) }
+    var enabledTypes by remember { mutableStateOf(setOf("favorite", "camera", "speed_camera", "traffic_light_camera", "danger", "school_zone", "fuel", "parking", "rest_area", "custom")) }
+    val visiblePoints = mapPoints.filter { it.type in enabledTypes }
     MaterialTheme(colorScheme = DarkColors) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Column {
                 Box(modifier = Modifier.weight(1f)) {
-                    MapScreen(location = location, route = route, mapPoints = mapPoints, hasMapTilerKey = hasMapTilerKey)
+                    MapScreen(location = location, route = route, mapPoints = visiblePoints, hasMapTilerKey = hasMapTilerKey)
                     SearchBar(modifier = Modifier.align(Alignment.TopCenter), results = searchResults, searching = searching, onSearch = onSearch, onSelectPlace = onSelectPlace)
                     ApiStatus(modifier = Modifier.align(Alignment.TopCenter).padding(top = 78.dp), status = apiStatus)
-                    route?.let { NavigationSummary(modifier = Modifier.align(Alignment.TopStart).padding(top = 128.dp), distanceMeters = it.distanceMeters, durationSeconds = it.durationSeconds) }
+                    Button(onClick = { showLayers = !showLayers }, modifier = Modifier.align(Alignment.TopEnd).padding(top = 80.dp, end = 16.dp)) { Text("Capas") }
+                    if (showLayers) {
+                        LayerPanel(modifier = Modifier.align(Alignment.TopEnd).padding(top = 132.dp, end = 16.dp), enabledTypes = enabledTypes, onToggle = { type -> enabledTypes = if (type in enabledTypes) enabledTypes - type else enabledTypes + type })
+                    }
+                    route?.let { NavigationSummary(modifier = Modifier.align(Alignment.TopStart).padding(top = 128.dp), distanceMeters = it.distanceMeters, durationSeconds = it.durationSeconds, nextInstruction = it.instructions.firstOrNull()?.text) }
                     route?.let { NavigationEngine.update(it, location)?.let { state -> NavigationStateBanner(modifier = Modifier.align(Alignment.TopStart).padding(top = 182.dp), state.offRoute) } }
+                    pointAlert?.let { PointAlertBanner(modifier = Modifier.align(Alignment.TopCenter).padding(top = 232.dp), text = it) }
+                    route?.let { Button(onClick = onFinishNavigation, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 84.dp)) { Text("Finalizar") } }
                     LocationButton(
                         modifier = Modifier.align(Alignment.BottomEnd),
                         onRequestLocation = onRequestLocation,
@@ -66,6 +75,20 @@ fun LocusGpsApp(location: UserLocation?, route: RouteResult?, mapPoints: List<Ma
             }
         }
     }
+}
+
+@Composable
+private fun LayerPanel(modifier: Modifier, enabledTypes: Set<String>, onToggle: (String) -> Unit) = Surface(modifier = modifier, color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f), shape = RoundedCornerShape(14.dp)) {
+    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        listOf("camera" to "Cámaras", "danger" to "Peligros", "favorite" to "Favoritos", "fuel" to "Gasolineras", "parking" to "Parkings", "custom" to "Personalizados").forEach { (type, label) ->
+            Button(onClick = { onToggle(type) }, modifier = Modifier.fillMaxWidth()) { Text(if (type in enabledTypes) "✓ $label" else "  $label") }
+        }
+    }
+}
+
+@Composable
+private fun PointAlertBanner(modifier: Modifier, text: String) = Surface(modifier = modifier.padding(horizontal = 16.dp), color = Color(0xFF6D3D16), shape = RoundedCornerShape(12.dp)) {
+    Text("⚠ $text", modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp), color = Color.White)
 }
 
 @Composable
@@ -87,7 +110,7 @@ private fun ApiStatus(modifier: Modifier, status: String) = Surface(
 }
 
 @Composable
-private fun NavigationSummary(modifier: Modifier, distanceMeters: Double, durationSeconds: Int) = Surface(
+private fun NavigationSummary(modifier: Modifier, distanceMeters: Double, durationSeconds: Int, nextInstruction: String?) = Surface(
     modifier = modifier.padding(horizontal = 16.dp),
     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
     shape = RoundedCornerShape(14.dp),
@@ -96,8 +119,13 @@ private fun NavigationSummary(modifier: Modifier, distanceMeters: Double, durati
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Text(formatDistance(distanceMeters), color = Color.White)
-        Text(formatDuration(durationSeconds), color = Color(0xFFBBC7D3))
+        Column {
+            Text(nextInstruction ?: "Ruta activa", color = Color.White)
+            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                Text(formatDistance(distanceMeters), color = Color.White)
+                Text(formatDuration(durationSeconds), color = Color(0xFFBBC7D3))
+            }
+        }
     }
 }
 

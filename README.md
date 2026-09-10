@@ -89,6 +89,7 @@ GET    /api/map-points?lat=&lon=&radius=&type=
 POST   /api/map-points
 PATCH  /api/map-points/:id
 DELETE /api/map-points/:id
+POST   /api/assistant/search
 ```
 
 Después de desplegar cambios de base de datos en Hostinger, ejecutar `npm run migrate` para aplicar las migraciones, incluida `002_map_points.sql`.
@@ -109,4 +110,4 @@ Después de desplegar cambios de base de datos en Hostinger, ejecutar `npm run m
 - [x] Fase 4: navegación, ETA, voz y recálculo.
 - [x] Fase 5: puntos personalizados, capas y alertas locales.
 - [x] Fase 6: búsqueda y selección de destinos.
-- [ ] Fase 7: IA opcional.
+- [~] Fase 7: asistente opcional con fallback local; proveedor de IA externo queda desactivado por defecto.

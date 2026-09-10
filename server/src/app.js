@@ -1,4 +1,6 @@
 import express from 'express';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import helmet from 'helmet';
 import { env } from './config/env.js';
 import { authenticateDevice } from './middleware/auth.js';
@@ -10,10 +12,14 @@ import { favoritesRouter } from './routes/favorites.js';
 import { routesRouter } from './routes/routes.js';
 import { searchRouter } from './routes/search.js';
 import { mapPointsRouter } from './routes/mapPoints.js';
+import { settingsRouter } from './routes/settings.js';
+import { assistantRouter } from './routes/assistant.js';
 
 const app = express();
+const publicDirectory = path.join(path.dirname(fileURLToPath(import.meta.url)), '../public');
 app.disable('x-powered-by');
 app.use(helmet());
+app.use(express.static(publicDirectory, { index: false, maxAge: '1d' }));
 app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 app.use(express.json({ limit: '32kb' }));
 app.use((req, res, next) => {
@@ -41,6 +47,8 @@ app.get('/', (req, res) => {
 app.use(authenticateDevice);
 app.use(searchRouter);
 app.use(mapPointsRouter);
+app.use(settingsRouter);
+app.use(assistantRouter);
 app.use(locationRouter);
 app.use(favoritesRouter);
 app.use(routesRouter);
