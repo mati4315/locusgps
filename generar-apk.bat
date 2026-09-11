@@ -62,5 +62,5 @@ echo %APK_DESTINO%
 echo.
 echo Se abrira la carpeta de copias.
 explorer "%CARPETA_SALIDA%"
-pause
+timeout /t 2 /nobreak >nul
 exit /b 0

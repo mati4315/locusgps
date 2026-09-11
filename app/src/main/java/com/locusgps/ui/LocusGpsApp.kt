@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.locusgps.location.UserLocation
@@ -48,30 +49,44 @@ private val DarkColors = darkColorScheme(
 fun LocusGpsApp(location: UserLocation?, route: RouteResult?, mapPoints: List<MapPoint>, pointAlert: String?, searchResults: List<SearchPlace>, searching: Boolean, voiceEnabled: Boolean, simulationRunning: Boolean, simulationSpeed: Float, hasMapTilerKey: Boolean, apiStatus: String, onRequestLocation: () -> Unit, recenterRequest: Int, onCenterLocation: () -> Unit, contextPoint: RoutePoint?, onLongPressMap: (RoutePoint) -> Unit, onDismissContext: () -> Unit, onGoToContext: (RoutePoint) -> Unit, onSaveContext: (RoutePoint) -> Unit, onRequestDemoRoute: () -> Unit, onSearch: (String) -> Unit, onSelectPlace: (SearchPlace) -> Unit, onToggleVoice: () -> Unit, onSaveCurrentPoint: () -> Unit, onFinishNavigation: () -> Unit, onOpenSimulation: () -> Unit, onSetSimulationSpeed: (Float) -> Unit, onStartSimulation: () -> Unit, onPauseSimulation: () -> Unit, onStopSimulation: () -> Unit, onSimulateDetour: () -> Unit, onRandomDestination: () -> Unit, pendingExternalDestination: RoutePoint?, onConfirmExternalDestination: (RoutePoint) -> Unit, onDismissExternalDestination: () -> Unit, onRequestDefaultBrowser: () -> Unit) {
     var showLayers by remember { mutableStateOf(false) }
     var showSimulation by remember { mutableStateOf(false) }
+    var mapBearing by remember { mutableStateOf(0f) }
+    var followingLocation by remember { mutableStateOf(route != null) }
     var enabledTypes by remember { mutableStateOf(setOf("favorite", "camera", "speed_camera", "traffic_light_camera", "danger", "school_zone", "fuel", "parking", "rest_area", "custom")) }
     val visiblePoints = mapPoints.filter { it.type in enabledTypes }
     MaterialTheme(colorScheme = DarkColors) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Column {
                 Box(modifier = Modifier.weight(1f)) {
-                    MapScreen(location = location, route = route, mapPoints = visiblePoints, recenterRequest = recenterRequest, hasMapTilerKey = hasMapTilerKey, onLongPress = onLongPressMap)
+                    MapScreen(location = location, route = route, mapPoints = visiblePoints, recenterRequest = recenterRequest, hasMapTilerKey = hasMapTilerKey, onLongPress = onLongPressMap, onCameraBearingChanged = { mapBearing = it }, onFollowChanged = { followingLocation = it })
                     SearchBar(modifier = Modifier.align(Alignment.TopCenter), results = searchResults, searching = searching, onSearch = onSearch, onSelectPlace = onSelectPlace)
-                    ApiStatus(modifier = Modifier.align(Alignment.TopCenter).padding(top = 78.dp), status = apiStatus)
                     Button(onClick = { showLayers = !showLayers }, modifier = Modifier.align(Alignment.TopEnd).padding(top = 80.dp, end = 16.dp)) { Text("Capas") }
                     Button(onClick = { showSimulation = !showSimulation }, modifier = Modifier.align(Alignment.TopEnd).padding(top = 80.dp, end = 94.dp)) { Text("Prueba") }
                     Button(onClick = onRequestDefaultBrowser, modifier = Modifier.align(Alignment.TopEnd).padding(top = 80.dp, end = 176.dp)) { Text("Navegador") }
+                    NorthIndicator(bearing = mapBearing, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 18.dp, bottom = 350.dp))
                     if (showLayers) {
-                        LayerPanel(modifier = Modifier.align(Alignment.TopEnd).padding(top = 132.dp, end = 16.dp), enabledTypes = enabledTypes, onToggle = { type -> enabledTypes = if (type in enabledTypes) enabledTypes - type else enabledTypes + type })
+                        LayerPanel(
+                            modifier = Modifier.align(Alignment.TopEnd).padding(top = 132.dp, end = 16.dp),
+                            enabledTypes = enabledTypes,
+                            onToggle = { type ->
+                                val cameraTypes = setOf("camera", "speed_camera", "traffic_light_camera")
+                                if (type == "camera") {
+                                    enabledTypes = if (cameraTypes.all { it in enabledTypes }) enabledTypes - cameraTypes else enabledTypes + cameraTypes
+                                } else {
+                                    enabledTypes = if (type in enabledTypes) enabledTypes - type else enabledTypes + type
+                                }
+                            },
+                        )
                     }
                     if (showSimulation) SimulationPanel(modifier = Modifier.align(Alignment.TopEnd).padding(top = 132.dp, end = 94.dp), routeAvailable = route != null, running = simulationRunning, speed = simulationSpeed, onSpeed = onSetSimulationSpeed, onStart = onStartSimulation, onPause = onPauseSimulation, onStop = onStopSimulation, onDetour = onSimulateDetour, onRandomDestination = onRandomDestination)
                     route?.let { NavigationSummary(modifier = Modifier.align(Alignment.TopStart).padding(top = 128.dp), distanceMeters = it.distanceMeters, durationSeconds = it.durationSeconds, nextInstruction = it.instructions.firstOrNull()?.text) }
                     route?.let { NavigationEngine.update(it, location)?.let { state -> NavigationStateBanner(modifier = Modifier.align(Alignment.TopStart).padding(top = 182.dp), state.offRoute) } }
                     pointAlert?.let { PointAlertBanner(modifier = Modifier.align(Alignment.TopCenter).padding(top = 232.dp), text = it) }
                     route?.let { Button(onClick = onFinishNavigation, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 84.dp)) { Text("Finalizar") } }
-                    LocationButton(
-                        modifier = Modifier.align(Alignment.BottomEnd),
-                        onRequestLocation = onCenterLocation,
-                    )
+                    if (route != null && !followingLocation) {
+                        Button(onClick = onCenterLocation, modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Text("➤  Centrar") }
+                    } else {
+                        LocationButton(modifier = Modifier.align(Alignment.BottomEnd), onRequestLocation = onCenterLocation)
+                    }
                     Button(onClick = onRequestDemoRoute, modifier = Modifier.align(Alignment.BottomStart).padding(20.dp)) { Text("Ruta demo") }
                     Button(onClick = onToggleVoice, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 92.dp, bottom = 28.dp)) { Text(if (voiceEnabled) "Voz: ON" else "Voz: OFF") }
                     Button(onClick = onSaveCurrentPoint, modifier = Modifier.align(Alignment.BottomStart).padding(start = 20.dp, bottom = 84.dp)) { Text("Guardar punto") }
@@ -231,7 +246,20 @@ private fun LocationButton(modifier: Modifier, onRequestLocation: () -> Unit) = 
     onClick = onRequestLocation,
     contentPadding = PaddingValues(0.dp),
     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface),
-) { Text("◎", color = MaterialTheme.colorScheme.primary) }
+) { Text("➤", color = MaterialTheme.colorScheme.primary) }
+
+@Composable
+private fun NorthIndicator(bearing: Float, modifier: Modifier) = Surface(
+    modifier = modifier.size(48.dp),
+    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+    shape = RoundedCornerShape(24.dp),
+    shadowElevation = 6.dp,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxSize()) {
+        Text("N", color = Color(0xFFD32F2F), style = MaterialTheme.typography.labelLarge)
+        Text("↑", color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.rotate(-bearing))
+    }
+}
 
 @Composable
 private fun MissingKeyMessage(modifier: Modifier) = Surface(

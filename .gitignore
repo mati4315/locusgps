@@ -7,6 +7,8 @@ app/build/
 keystore.properties
 node_modules/
 dist-apk/
+desktop.ini
+logo.png
 
 # Never commit runtime secrets.
 maptiler.properties
