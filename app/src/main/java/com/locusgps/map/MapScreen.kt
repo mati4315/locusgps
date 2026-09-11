@@ -39,6 +39,7 @@ fun MapScreen(location: UserLocation?, route: RouteResult?, mapPoints: List<MapP
     val context = LocalContext.current
     val latestLocation = rememberUpdatedState(location)
     val isLocationPuckReady = remember { mutableStateOf(false) }
+    val lastHandledRecenter = remember { mutableStateOf(0) }
     val mapView = remember {
         MapLibre.getInstance(context)
         MapView(context).apply {
@@ -51,6 +52,12 @@ fun MapScreen(location: UserLocation?, route: RouteResult?, mapPoints: List<MapP
                 }
                 MapStyleConfig.styleUrl()?.let { styleUrl ->
                     map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
+                        // Vista inicial del proyecto: Gold Coast, Queensland.
+                        // La cámara solo seguirá al GPS durante una navegación activa.
+                        map.cameraPosition = CameraPosition.Builder()
+                            .target(LatLng(-28.0167, 153.4000))
+                            .zoom(10.5)
+                            .build()
                         route?.let { style.addRoute(it) }
                         map.locationComponent.activateLocationComponent(
                             LocationComponentActivationOptions.builder(context, style)
@@ -76,21 +83,27 @@ fun MapScreen(location: UserLocation?, route: RouteResult?, mapPoints: List<MapP
         }
     }
 
-    LaunchedEffect(location, recenterRequest, hasMapTilerKey, isLocationPuckReady.value) {
+    LaunchedEffect(location, route, recenterRequest, hasMapTilerKey, isLocationPuckReady.value) {
         if (hasMapTilerKey && location != null) {
             mapView.getMapAsync { map ->
                 if (isLocationPuckReady.value) {
                     map.locationComponent.forceLocationUpdate(location.toAndroidLocation())
                 }
-                map.animateCamera(
-                    CameraUpdateFactory.newCameraPosition(
-                        CameraPosition.Builder()
-                            .target(LatLng(location.latitude, location.longitude))
-                            .zoom(15.5)
-                            .bearing(location.bearing?.toDouble() ?: 0.0)
-                            .build(),
-                    ),
-                )
+                // Follow the user only during active navigation. A manual recenter
+                // request still works while browsing the map without a route.
+                val shouldCenter = route != null || recenterRequest != lastHandledRecenter.value
+                if (shouldCenter) {
+                    map.animateCamera(
+                        CameraUpdateFactory.newCameraPosition(
+                            CameraPosition.Builder()
+                                .target(LatLng(location.latitude, location.longitude))
+                                .zoom(15.5)
+                                .bearing(if (route != null) location.bearing?.toDouble() ?: 0.0 else map.cameraPosition.bearing)
+                                .build(),
+                        ),
+                    )
+                    lastHandledRecenter.value = recenterRequest
+                }
             }
         }
     }

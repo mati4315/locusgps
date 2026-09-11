@@ -45,7 +45,7 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun LocusGpsApp(location: UserLocation?, route: RouteResult?, mapPoints: List<MapPoint>, pointAlert: String?, searchResults: List<SearchPlace>, searching: Boolean, voiceEnabled: Boolean, simulationRunning: Boolean, simulationSpeed: Float, hasMapTilerKey: Boolean, apiStatus: String, onRequestLocation: () -> Unit, recenterRequest: Int, onCenterLocation: () -> Unit, contextPoint: RoutePoint?, onLongPressMap: (RoutePoint) -> Unit, onDismissContext: () -> Unit, onGoToContext: (RoutePoint) -> Unit, onSaveContext: (RoutePoint) -> Unit, onRequestDemoRoute: () -> Unit, onSearch: (String) -> Unit, onSelectPlace: (SearchPlace) -> Unit, onToggleVoice: () -> Unit, onSaveCurrentPoint: () -> Unit, onFinishNavigation: () -> Unit, onOpenSimulation: () -> Unit, onSetSimulationSpeed: (Float) -> Unit, onStartSimulation: () -> Unit, onPauseSimulation: () -> Unit, onStopSimulation: () -> Unit, onSimulateDetour: () -> Unit, onRandomDestination: () -> Unit) {
+fun LocusGpsApp(location: UserLocation?, route: RouteResult?, mapPoints: List<MapPoint>, pointAlert: String?, searchResults: List<SearchPlace>, searching: Boolean, voiceEnabled: Boolean, simulationRunning: Boolean, simulationSpeed: Float, hasMapTilerKey: Boolean, apiStatus: String, onRequestLocation: () -> Unit, recenterRequest: Int, onCenterLocation: () -> Unit, contextPoint: RoutePoint?, onLongPressMap: (RoutePoint) -> Unit, onDismissContext: () -> Unit, onGoToContext: (RoutePoint) -> Unit, onSaveContext: (RoutePoint) -> Unit, onRequestDemoRoute: () -> Unit, onSearch: (String) -> Unit, onSelectPlace: (SearchPlace) -> Unit, onToggleVoice: () -> Unit, onSaveCurrentPoint: () -> Unit, onFinishNavigation: () -> Unit, onOpenSimulation: () -> Unit, onSetSimulationSpeed: (Float) -> Unit, onStartSimulation: () -> Unit, onPauseSimulation: () -> Unit, onStopSimulation: () -> Unit, onSimulateDetour: () -> Unit, onRandomDestination: () -> Unit, pendingExternalDestination: RoutePoint?, onConfirmExternalDestination: (RoutePoint) -> Unit, onDismissExternalDestination: () -> Unit, onRequestDefaultBrowser: () -> Unit) {
     var showLayers by remember { mutableStateOf(false) }
     var showSimulation by remember { mutableStateOf(false) }
     var enabledTypes by remember { mutableStateOf(setOf("favorite", "camera", "speed_camera", "traffic_light_camera", "danger", "school_zone", "fuel", "parking", "rest_area", "custom")) }
@@ -59,6 +59,7 @@ fun LocusGpsApp(location: UserLocation?, route: RouteResult?, mapPoints: List<Ma
                     ApiStatus(modifier = Modifier.align(Alignment.TopCenter).padding(top = 78.dp), status = apiStatus)
                     Button(onClick = { showLayers = !showLayers }, modifier = Modifier.align(Alignment.TopEnd).padding(top = 80.dp, end = 16.dp)) { Text("Capas") }
                     Button(onClick = { showSimulation = !showSimulation }, modifier = Modifier.align(Alignment.TopEnd).padding(top = 80.dp, end = 94.dp)) { Text("Prueba") }
+                    Button(onClick = onRequestDefaultBrowser, modifier = Modifier.align(Alignment.TopEnd).padding(top = 80.dp, end = 176.dp)) { Text("Navegador") }
                     if (showLayers) {
                         LayerPanel(modifier = Modifier.align(Alignment.TopEnd).padding(top = 132.dp, end = 16.dp), enabledTypes = enabledTypes, onToggle = { type -> enabledTypes = if (type in enabledTypes) enabledTypes - type else enabledTypes + type })
                     }
@@ -76,9 +77,27 @@ fun LocusGpsApp(location: UserLocation?, route: RouteResult?, mapPoints: List<Ma
                     Button(onClick = onSaveCurrentPoint, modifier = Modifier.align(Alignment.BottomStart).padding(start = 20.dp, bottom = 84.dp)) { Text("Guardar punto") }
                     if (!hasMapTilerKey) MissingKeyMessage(modifier = Modifier.align(Alignment.Center))
                     contextPoint?.let { ContextPointPanel(modifier = Modifier.align(Alignment.Center), onGoTo = { onGoToContext(it) }, onSave = { onSaveContext(it) }, onDismiss = onDismissContext) }
+                    pendingExternalDestination?.let { point -> ExternalDestinationPanel(point, onConfirmExternalDestination, onDismissExternalDestination) }
                 }
                 BottomNavigation()
             }
+        }
+    }
+}
+
+@Composable
+private fun ExternalDestinationPanel(point: RoutePoint, onConfirm: (RoutePoint) -> Unit, onDismiss: () -> Unit) = Surface(
+    modifier = Modifier.padding(24.dp),
+    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+    shape = RoundedCornerShape(16.dp),
+) {
+    Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Destino detectado", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        Text("¿Navegar con Locus GPS?", color = Color.White)
+        Text("${"%.6f".format(point.latitude)}, ${"%.6f".format(point.longitude)}", color = Color(0xFFBBC7D3))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onDismiss) { Text("Cancelar") }
+            Button(onClick = { onConfirm(point) }) { Text("Navegar") }
         }
     }
 }

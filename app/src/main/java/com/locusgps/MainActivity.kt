@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.app.role.RoleManager
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -54,6 +56,7 @@ class MainActivity : ComponentActivity() {
     private var lastRecalculationAt = 0L
     private var recalculating = false
     private var pointAlert by mutableStateOf<String?>(null)
+    private var pointAlertJob: Job? = null
     private var simulationPoint by mutableStateOf<RoutePoint?>(null)
     private var simulationRunning by mutableStateOf(false)
     private var simulationSpeed by mutableStateOf(40f)
@@ -61,6 +64,7 @@ class MainActivity : ComponentActivity() {
     private var simulationDetourTicks = 0
     private var recenterRequest by mutableStateOf(0)
     private var contextPoint by mutableStateOf<RoutePoint?>(null)
+    private var pendingExternalDestination by mutableStateOf<RoutePoint?>(null)
     private var simulationJob: Job? = null
     private var voiceEnabled by mutableStateOf(false)
     private val permissionLauncher = registerForActivityResult(
@@ -111,6 +115,10 @@ class MainActivity : ComponentActivity() {
                 onStopSimulation = ::stopSimulation,
                 onSimulateDetour = ::simulateDetour,
                 onRandomDestination = { randomDestination(displayLocation) },
+                pendingExternalDestination = pendingExternalDestination,
+                onConfirmExternalDestination = { point -> pendingExternalDestination = null; routeToPoint(point, displayLocation) },
+                onDismissExternalDestination = { pendingExternalDestination = null },
+                onRequestDefaultBrowser = ::requestDefaultBrowser,
             )
         }
         lifecycleScope.launch {
@@ -131,12 +139,19 @@ class MainActivity : ComponentActivity() {
                         .onSuccess { officialPoints -> mapPoints = personalPoints + officialPoints }
                         .onFailure { mapPoints = personalPoints }
                 }
-                pointAlertEngine.update(mapPoints, RoutePoint(currentLocation.latitude, currentLocation.longitude))?.let { alert ->
-                    pointAlert = "${alert.title} · ${alert.distanceMeters.toInt()} m"
-                }
                 val activeRoute = route
                 val activeDestination = destination
-                if (activeRoute == null || activeDestination == null || recalculating) return@collect
+                if (activeRoute == null || activeDestination == null) return@collect
+                pointAlertEngine.update(mapPoints, RoutePoint(currentLocation.latitude, currentLocation.longitude))?.let { alert ->
+                    val text = "${alert.title} · ${alert.distanceMeters.toInt()} m"
+                    pointAlert = text
+                    pointAlertJob?.cancel()
+                    pointAlertJob = lifecycleScope.launch {
+                        delay(5_000)
+                        if (pointAlert == text) pointAlert = null
+                    }
+                }
+                if (recalculating) return@collect
                 val state = NavigationEngine.update(activeRoute, currentLocation) ?: return@collect
                 voiceEngine.announceNextInstruction(activeRoute, currentLocation)
                 val checkNow = System.currentTimeMillis()
@@ -161,19 +176,73 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleExternalNavigation(intent: Intent?) {
-        if (intent?.action != Intent.ACTION_VIEW) return
-        val point = intent.data?.let(::pointFromUri) ?: return
-        lifecycleScope.launch {
-            val location = locationRepository.location.filterNotNull().first()
-            routeToPoint(point, location)
+        if (intent == null) return
+        val point = when (intent.action) {
+            Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)?.let(::pointFromText)
+            Intent.ACTION_VIEW -> intent.data?.let(::pointFromUri)
+            else -> null
+        }
+        if (point == null) {
+            if (intent.action == Intent.ACTION_VIEW) forwardWebLinkToChrome(intent.data)
+            return
+        }
+        // Sin una navegación activa no hace falta confirmar: el destino externo
+        // inicia directamente la primera ruta. Si ya hay un viaje, se protege
+        // el destino actual mostrando la confirmación en la interfaz.
+        if (route == null && destination == null) {
+            lifecycleScope.launch {
+                val location = locationRepository.location.filterNotNull().first()
+                routeToPoint(point, location)
+            }
+        } else {
+            pendingExternalDestination = point
         }
     }
 
+    private fun forwardWebLinkToChrome(uri: Uri?) {
+        if (uri == null || uri.scheme !in setOf("http", "https")) return
+        val chromeIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+            setPackage("com.android.chrome")
+            addCategory(Intent.CATEGORY_BROWSABLE)
+        }
+        runCatching { startActivity(chromeIntent) }
+            .onFailure { apiStatus = "Instala Chrome para abrir este enlace" }
+    }
+
+    private fun requestDefaultBrowser() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            apiStatus = "Android no permite solicitar este rol automáticamente"
+            return
+        }
+        val roleManager = getSystemService(RoleManager::class.java)
+        if (!roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)) {
+            apiStatus = "El rol de navegador no está disponible"
+            return
+        }
+        if (roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)) {
+            apiStatus = "Locus ya es el navegador predeterminado"
+            return
+        }
+        startActivity(roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER))
+    }
+
+    private fun pointFromText(text: String): RoutePoint? = runCatching {
+        pointFromUri(Uri.parse(text.trim()))
+    }.getOrNull()
+
     private fun pointFromUri(uri: Uri): RoutePoint? {
-        if (uri.scheme == "locusgps" && uri.host == "navigate") {
+        val isHttpsNavigationLink = uri.scheme.equals("https", ignoreCase = true) &&
+            uri.host.equals("locusgps.pro", ignoreCase = true) &&
+            uri.path?.trimEnd('/') == "/navigate"
+        val isWazeNavigationLink = uri.host.equals("www.waze.com", ignoreCase = true) && uri.path?.trimEnd('/') == "/ul"
+        if ((uri.scheme == "locusgps" && uri.host == "navigate") || isHttpsNavigationLink) {
             val latitude = uri.getQueryParameter("lat")?.toDoubleOrNull()
             val longitude = uri.getQueryParameter("lon")?.toDoubleOrNull()
             return validPoint(latitude, longitude)
+        }
+        if (isWazeNavigationLink) {
+            val coordinates = uri.getQueryParameter("ll")?.split(',')
+            return validPoint(coordinates?.getOrNull(0)?.toDoubleOrNull(), coordinates?.getOrNull(1)?.toDoubleOrNull())
         }
         if (uri.scheme == "geo") {
             val raw = uri.schemeSpecificPart.substringBefore('?')
